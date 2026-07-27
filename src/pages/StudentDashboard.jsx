@@ -682,8 +682,6 @@ export default function StudentDashboard() {
                             {item.fileUrl ? "⬇️ Download" : "🔗 Open"}
                           </a>
                         )}
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
