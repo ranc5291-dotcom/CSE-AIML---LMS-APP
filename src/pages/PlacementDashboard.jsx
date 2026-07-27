@@ -442,7 +442,7 @@ export default function PlacementDashboard() {
                       >
                         <td className="py-3 px-4 text-gray-500 text-xs">{i + 1}</td>
                         <td className="py-3 px-4">
-                          
+                          <a
                             href={d.link || "#"}
                             target="_blank"
                             rel="noreferrer"
@@ -760,7 +760,7 @@ export default function PlacementDashboard() {
                             </button>
                           )}
                           {(item.fileUrl || item.link) && (
-                            
+                            <a
                               href={item.fileUrl || item.link}
                               target="_blank"
                               rel="noreferrer"
