@@ -488,7 +488,40 @@ export function LMSProvider({ children }) {
   const removeAptitude = async (id) => { try { await deleteDoc(doc(db, "aptitude", String(id))); } catch {} setAptitude((p) => p.filter((q) => q.id !== id)); };
 
   // ── PLACEMENT UPLOADS ─────────────────────────────────────────
-  const addPlacementUpload    = async (item) => { try { await addDoc(collection(db, "placementUploads"), { ...item, createdAt: serverTimestamp() }); } catch { setPlacementUploads((p) => [{ ...item, id: Date.now() }, ...p]); } };
+  const addPlacementUpload = async (item, file = null) => {
+  let fileUrl  = item.fileUrl || null;
+  let fileName = item.fileName || null;
+
+  if (file) {
+    try {
+      const up = await uploadToCloudinary(file);
+      fileUrl  = up.fileUrl;
+      fileName = up.fileName;
+    } catch (cloudErr) {
+      console.warn("Placement upload: Cloudinary failed, using local blob URL instead:", cloudErr.message);
+      fileUrl  = URL.createObjectURL(file);
+      fileName = file.name;
+    }
+  }
+
+  const payload = {
+    category:   item.category,
+    title:      item.title,
+    fileName,
+    fileUrl,
+    link:       item.link || null,
+    status:     item.status || null,
+    uploadedBy: item.uploadedBy,
+    date:       item.date || new Date().toISOString().split("T")[0],
+  };
+
+  try {
+    await addDoc(collection(db, "placementUploads"), { ...payload, createdAt: serverTimestamp() });
+  } catch (err) {
+    console.warn("addPlacementUpload:", err.message);
+    setPlacementUploads((p) => [{ ...payload, id: Date.now() }, ...p]);
+  }
+};
   const removePlacementUpload = async (id)   => { try { await deleteDoc(doc(db, "placementUploads", String(id))); } catch {} setPlacementUploads((p) => p.filter((u) => u.id !== id)); };
 
   // ── PROMOTIONS ────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
+import PDFViewer from "../components/PDFViewer";
 
 const DIFFICULTY = ["Easy", "Medium", "Hard"];
 const UPLOAD_CATEGORIES = [
@@ -42,6 +43,7 @@ export default function PlacementDashboard() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeTab, setActiveTab]   = useState("Companies");
+  const [pdfViewer, setPdfViewer]   = useState(null);
 
   // Companies form
   const [showCompanyForm, setShowCompanyForm] = useState(false);
@@ -96,6 +98,8 @@ export default function PlacementDashboard() {
   const [uploadTitle, setUploadTitle]       = useState("");
   const [uploadFile, setUploadFile]         = useState(null);
   const [uploadLink, setUploadLink]         = useState("");
+  const [uploadStatus, setUploadStatus]     = useState(""); // optional: "", "Open", "Closed"
+  const [uploading, setUploading]           = useState(false);
   const uploadRef                           = useRef(null);
 
   const handleAddCompany = () => {
@@ -122,22 +126,29 @@ export default function PlacementDashboard() {
     setShowAptForm(false);
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!uploadTitle) return;
-    addPlacementUpload({
-      category: uploadCategory,
-      title: uploadTitle,
-      fileName: uploadFile?.name || null,
-      fileUrl: uploadFile ? URL.createObjectURL(uploadFile) : null,
-      link: uploadLink,
-      uploadedBy: user?.name,
-      date: new Date().toISOString().split("T")[0],
-    });
-    setUploadTitle("");
-    setUploadFile(null);
-    setUploadLink("");
-    if (uploadRef.current) uploadRef.current.value = "";
-    setShowUploadForm(false);
+    setUploading(true);
+    try {
+      await addPlacementUpload({
+        category:   uploadCategory,
+        title:      uploadTitle,
+        link:       uploadLink,
+        status:     uploadStatus || null,
+        uploadedBy: user?.name,
+        date:       new Date().toISOString().split("T")[0],
+      }, uploadFile); // actual File object — uploaded to Cloudinary inside addPlacementUpload
+
+      setUploadTitle("");
+      setUploadFile(null);
+      setUploadLink("");
+      setUploadStatus("");
+      if (uploadRef.current) uploadRef.current.value = "";
+      setShowUploadForm(false);
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    }
+    setUploading(false);
   };
 
   const score = submitted
@@ -160,12 +171,9 @@ export default function PlacementDashboard() {
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
 
           {/* Hero Banner */}
-            <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-2xl p-5 text-white">
+          <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-2xl p-5 text-white">
             <p className="text-amber-100 text-sm mb-1">Placement Portal 💼</p>
             <h2 className="text-2xl font-bold">{user?.name}</h2>
-            <p className="text-amber-100 text-sm mt-1">
-               {user?.id} · {isOfficer ? "Manage Placements" : "Placement Opportunities"}
-            </p>
           </div>
 
           {/* Tabs */}
@@ -434,7 +442,7 @@ export default function PlacementDashboard() {
                       >
                         <td className="py-3 px-4 text-gray-500 text-xs">{i + 1}</td>
                         <td className="py-3 px-4">
-                          <a
+                          
                             href={d.link || "#"}
                             target="_blank"
                             rel="noreferrer"
@@ -651,6 +659,22 @@ export default function PlacementDashboard() {
                     </div>
                   </div>
 
+                  {/* Optional status — Open / Closed / None */}
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">
+                      Status <span className="text-gray-600">(optional)</span>
+                    </label>
+                    <select
+                      value={uploadStatus}
+                      onChange={(e) => setUploadStatus(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
+                    >
+                      <option value="">— None —</option>
+                      <option value="Open">Open</option>
+                      <option value="Closed">Closed</option>
+                    </select>
+                  </div>
+
                   <div
                     onClick={() => uploadRef.current?.click()}
                     className={`w-full border-2 border-dashed rounded-xl p-5 flex flex-col items-center gap-2 cursor-pointer transition-all
@@ -682,10 +706,10 @@ export default function PlacementDashboard() {
 
                   <button
                     onClick={handleUpload}
-                    disabled={!uploadTitle}
+                    disabled={!uploadTitle || uploading}
                     className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer"
                   >
-                    Upload Resource
+                    {uploading ? "⏳ Uploading..." : "Upload Resource"}
                   </button>
                 </div>
               )}
@@ -705,20 +729,38 @@ export default function PlacementDashboard() {
                     {items.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 border border-gray-700"
+                        className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 border border-gray-700 flex-wrap gap-2"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-xl">📄</span>
                           <div>
-                            <p className="text-white text-xs font-medium">{item.title}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-white text-xs font-medium">{item.title}</p>
+                              {item.status && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                                  ${item.status === "Open"
+                                    ? "bg-green-500/20 text-green-400"
+                                    : "bg-red-500/20 text-red-400"}`}>
+                                  {item.status}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-gray-500 text-xs">
                               {item.uploadedBy} · {item.date}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {item.fileUrl && (
+                            <button
+                              onClick={() => setPdfViewer({ fileUrl: item.fileUrl, fileName: item.fileName || item.title })}
+                              className="px-3 py-1.5 bg-violet-600/20 text-violet-300 rounded-lg text-xs hover:bg-violet-600/30 transition-all cursor-pointer"
+                            >
+                              👁 View
+                            </button>
+                          )}
                           {(item.fileUrl || item.link) && (
-                            <a
+                            
                               href={item.fileUrl || item.link}
                               target="_blank"
                               rel="noreferrer"
@@ -747,6 +789,15 @@ export default function PlacementDashboard() {
 
         </main>
       </div>
+
+      {/* PDF Viewer Modal */}
+      {pdfViewer && (
+        <PDFViewer
+          fileUrl={pdfViewer.fileUrl}
+          fileName={pdfViewer.fileName}
+          onClose={() => setPdfViewer(null)}
+        />
+      )}
     </div>
   );
 }
