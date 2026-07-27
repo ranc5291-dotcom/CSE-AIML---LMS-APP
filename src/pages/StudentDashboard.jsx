@@ -662,6 +662,15 @@ export default function StudentDashboard() {
                             <p className="text-gray-500 text-xs">{item.category} · {item.uploadedBy} · {item.date}</p>
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          {item.fileUrl && (
+                            <button
+                              onClick={() => openPDF(item.fileUrl, item.fileName || item.title)}
+                              className="px-3 py-1.5 bg-violet-600/20 text-violet-300 rounded-lg text-xs hover:bg-violet-600/30 transition-all cursor-pointer"
+                            >
+                              👁 View
+                            </button>
+                          )}
                         {(item.fileUrl || item.link) && (
                           <a
                             href={item.fileUrl || item.link}
