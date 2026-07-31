@@ -179,3 +179,35 @@ export async function deleteNote(noteId, fileUrl) {
     await supabase.from("notes").delete().eq("id", noteId);
   } catch (e) { console.warn("deleteNote failed", e); }
 }
+
+// ── PLACEMENT UPLOADS: upload file to Supabase Storage bucket "placement-uploads" ──
+// Unlike the Cloudinary helper this used to go through, this has NO blob-URL
+// fallback — if the upload fails, it throws, so the caller can surface a real
+// error instead of silently saving a broken blob: URL that only works in the
+// uploader's own browser tab.
+export async function uploadPlacementFile(file) {
+  const safeName = `${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("placement-uploads")
+    .upload(safeName, file, { upsert: false });
+
+  if (uploadError) {
+    throw new Error("Supabase upload failed: " + uploadError.message);
+  }
+
+  const { data: urlData } = supabase.storage
+    .from("placement-uploads")
+    .getPublicUrl(safeName);
+
+  return { fileUrl: urlData.publicUrl, fileName: file.name };
+}
+
+// ── PLACEMENT UPLOADS: delete file from storage (call before/with Firestore delete) ──
+export async function deletePlacementFile(fileUrl) {
+  try {
+    if (!fileUrl) return;
+    const path = fileUrl.split("/placement-uploads/")[1];
+    if (path) await supabase.storage.from("placement-uploads").remove([path]);
+  } catch (e) { console.warn("deletePlacementFile failed", e); }
+}

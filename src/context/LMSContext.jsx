@@ -5,6 +5,7 @@ import {
   doc, serverTimestamp, query, orderBy, updateDoc,
 } from "firebase/firestore";
 import { attendanceAPI, marksAPI } from "../utils/api";
+import { uploadPlacementFile, deletePlacementFile } from "../utils/supabase";
 
 const LMSContext = createContext(null);
 
@@ -276,9 +277,6 @@ export function LMSProvider({ children }) {
   };
 
   // ── GALLERY — Cloudinary + Firestore, with local fallback on failure ──
-  // If the Firestore write fails (e.g. security rules, network), the photo is
-  // kept in a local-only fallback list so it still shows up for this session
-  // instead of silently disappearing when the next Firestore snapshot arrives.
   const addGalleryPhoto = async (photoData, file) => {
     let fileUrl = photoData.url || null;
     if (file) {
@@ -303,8 +301,6 @@ export function LMSProvider({ children }) {
         date:       dateStr,
       });
     } catch (err) {
-      // Surface the real reason in the console so it's easy to diagnose
-      // (commonly: Firestore security rules blocking this role's writes).
       console.error("Gallery upload failed to sync to Firestore:", err.code || "", err.message);
       setGalleryFallback((p) => [
         { id: "local-" + Date.now(), caption: photoData.caption || "", uploadedBy: photoData.uploadedBy || "", category: photoData.category || "General", url: fileUrl, date: dateStr },
@@ -322,7 +318,7 @@ export function LMSProvider({ children }) {
     setGalleryFirestore((p) => p.filter((g) => g.id !== id));
   };
 
-  // ── NOTICES — Firestore (all roles see, faculty/placement/admin post) ──
+  // ── NOTICES ───────────────────────────────────────────────────
   const addNotice = async (notice) => {
     try {
       await addDoc(collection(db, "notices"), {
@@ -381,7 +377,7 @@ export function LMSProvider({ children }) {
     } catch { try { await attendanceAPI.update(studentId, studentName, subject, sem, value); } catch {} }
   };
 
-  // ── MARKS — with total and scored ─────────────────────────────
+  // ── MARKS ─────────────────────────────────────────────────────
   const updateMark = async (studentId, subject, scored, total = 100, studentName = "", sem = "") => {
     setMarks((p) => ({
       ...p,
@@ -487,47 +483,53 @@ export function LMSProvider({ children }) {
   const addAptitude    = async (q) => { try { await addDoc(collection(db, "aptitude"), { ...q, createdAt: serverTimestamp() }); } catch { setAptitude((p) => [{ ...q, id: Date.now() }, ...p]); } };
   const removeAptitude = async (id) => { try { await deleteDoc(doc(db, "aptitude", String(id))); } catch {} setAptitude((p) => p.filter((q) => q.id !== id)); };
 
-  // ── PLACEMENT UPLOADS ─────────────────────────────────────────
+  // ── PLACEMENT UPLOADS — now uses Supabase Storage, no blob-URL fallback ──
   const addPlacementUpload = async (item, file = null) => {
-  let fileUrl  = item.fileUrl || null;
-  let fileName = item.fileName || null;
+    let fileUrl  = item.fileUrl || null;
+    let fileName = item.fileName || null;
 
-  if (file) {
-    try {
-      const up = await uploadToCloudinary(file);
+    if (file) {
+      // No try/catch swallow here on purpose: if this fails, we want the
+      // caller (PlacementDashboard's handleUpload) to see the real error
+      // via its own catch block, instead of silently saving a blob URL
+      // that would break for every other user.
+      const up = await uploadPlacementFile(file);
       fileUrl  = up.fileUrl;
       fileName = up.fileName;
-    } catch (cloudErr) {
-      console.warn("Placement upload: Cloudinary failed, using local blob URL instead:", cloudErr.message);
-      fileUrl  = URL.createObjectURL(file);
-      fileName = file.name;
     }
-  }
 
-  const payload = {
-    category:   item.category,
-    title:      item.title,
-    fileName,
-    fileUrl,
-    link:       item.link || null,
-    status:     item.status || null,
-    uploadedBy: item.uploadedBy,
-    date:       item.date || new Date().toISOString().split("T")[0],
+    const payload = {
+      category:   item.category,
+      title:      item.title,
+      fileName,
+      fileUrl,
+      link:       item.link || null,
+      status:     item.status || null,
+      uploadedBy: item.uploadedBy,
+      date:       item.date || new Date().toISOString().split("T")[0],
+    };
+
+    try {
+      await addDoc(collection(db, "placementUploads"), { ...payload, createdAt: serverTimestamp() });
+    } catch (err) {
+      console.warn("addPlacementUpload (Firestore write failed):", err.message);
+      setPlacementUploads((p) => [{ ...payload, id: Date.now() }, ...p]);
+    }
   };
 
-  try {
-    await addDoc(collection(db, "placementUploads"), { ...payload, createdAt: serverTimestamp() });
-  } catch (err) {
-    console.warn("addPlacementUpload:", err.message);
-    setPlacementUploads((p) => [{ ...payload, id: Date.now() }, ...p]);
-  }
-};
-  const removePlacementUpload = async (id)   => { try { await deleteDoc(doc(db, "placementUploads", String(id))); } catch {} setPlacementUploads((p) => p.filter((u) => u.id !== id)); };
+  const removePlacementUpload = async (id) => {
+    try {
+      // Look up the item first so we can also delete its file from Storage
+      const item = placementUploads.find((u) => u.id === id);
+      if (item?.fileUrl) await deletePlacementFile(item.fileUrl);
+      await deleteDoc(doc(db, "placementUploads", String(id)));
+    } catch (e) {
+      console.warn("removePlacementUpload:", e.message);
+    }
+    setPlacementUploads((p) => p.filter((u) => u.id !== id));
+  };
 
   // ── PROMOTIONS ────────────────────────────────────────────────
-  // Called by Admin Dashboard whenever a student is promoted. Marks/attendance
-  // are keyed by studentId + subject (not by sem), so they are never touched
-  // or deleted by a promotion — only the student's year/sem fields change.
   const addPromotion = async (promo) => {
     const payload = {
       studentId:   promo.studentId,
@@ -547,7 +549,6 @@ export function LMSProvider({ children }) {
   };
 
   const acknowledgePromotion = async (id) => {
-    // Optimistically remove so the popup doesn't flash again before Firestore confirms
     setPromotions((p) => p.map((pr) => pr.id === id ? { ...pr, acknowledged: true } : pr));
     if (typeof id === "string" && id.startsWith("local-")) return;
     try { await updateDoc(doc(db, "promotions", String(id)), { acknowledged: true }); } catch {}
