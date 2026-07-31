@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 .env
 .env.local
+
+firebase-service-account.json
+*.json.bak
+__pycache__/
+.env

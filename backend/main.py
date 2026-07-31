@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from routers.notifications import router as notifications_router
 from routers.auth import router as auth_router
 from routers.notes import router as notes_router
 from routers.assignments import router as assignments_router
@@ -34,6 +34,7 @@ app.include_router(assignments_router)
 app.include_router(attendance_router)
 app.include_router(marks_router)
 app.include_router(complaints_router)
+app.include_router(notifications_router)
 app.include_router(announcements_router)
 app.include_router(events_router)
 app.include_router(companies_router)
