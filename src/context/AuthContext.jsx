@@ -7,6 +7,7 @@ import {
   onAuthChange,
 } from "../utils/firebase";
 import { supabase, logLogin } from "../utils/supabase";
+import { removeFCMToken } from "../utils/firebaseMessaging";
 
 const AuthContext = createContext(null);
 
@@ -61,12 +62,6 @@ async function fetchProfileById(uid) {
 }
 
 // ── PUBLIC GETTERS (used in dashboards) ──────────────────────────
-// IMPORTANT: these are now ASYNC (they hit Supabase over the network),
-// unlike the old localStorage versions. Any dashboard calling these
-// needs to `await` them or use them inside a useEffect + useState pair,
-// e.g.:
-//   const [students, setStudents] = useState([]);
-//   useEffect(() => { getAllStudents().then(setStudents); }, [enrolledVersion]);
 export async function getAllProfiles() {
   const { data, error } = await supabase.from("profiles").select("*");
   if (error) { console.warn("getAllProfiles failed", error); return []; }
@@ -195,11 +190,16 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ── LOGOUT ───────────────────────────────────────────────────
+  // Also removes this user's FCM token from Firestore so a signed-out
+  // device stops being targetable for push notifications.
   const logout = useCallback(async () => {
+    if (user?.id) {
+      try { await removeFCMToken(user.id); } catch (err) { console.warn("removeFCMToken failed", err); }
+    }
     try { await firebaseLogout(); } catch (err) { console.warn("firebaseLogout failed", err); }
     localStorage.removeItem(SESSION_KEY);
     setUser(null);
-  }, []);
+  }, [user]);
 
   // ── FORGOT PASSWORD ─────────────────────────────────────────
   const forgotPassword = useCallback(async (email) => {
