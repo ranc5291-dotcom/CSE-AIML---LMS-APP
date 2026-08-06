@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { setupRecaptcha, sendOTP, verifyOTP } from "../utils/firebase";
+import InstallAppButton from "../components/InstallAppButton";
 
 const ROLE_CONFIG = {
   student:   { label: "Student",           icon: "🎓", color: "from-blue-500 to-cyan-500",    route: "/student" },
@@ -530,6 +531,9 @@ export default function Login() {
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">CSEAIML LMS</h1>
           <p className="text-gray-400 mt-1 text-sm">Learning Management System</p>
+          <div className="mt-4">
+            <InstallAppButton />
+          </div>
         </div>
 
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl">

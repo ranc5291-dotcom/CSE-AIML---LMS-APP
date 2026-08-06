@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 
-// Detects iOS Safari specifically — the one major platform where
-// `beforeinstallprompt` never fires and "Add to Home Screen" must be
-// done manually via the Share sheet.
 function isIosSafari() {
   const ua = window.navigator.userAgent;
   const isIos = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
@@ -10,8 +7,6 @@ function isIosSafari() {
   return isIos && isSafari;
 }
 
-// True once the app is already installed / running standalone —
-// covers both the standard PWA check and iOS's proprietary flag.
 function isRunningStandalone() {
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
@@ -26,14 +21,12 @@ export function usePWAInstall() {
   const [isIos] = useState(() => isIosSafari());
 
   useEffect(() => {
-    // If already installed, never show anything — bail early.
     if (isRunningStandalone()) {
       setIsInstalled(true);
       return;
     }
 
     const handleBeforeInstallPrompt = (e) => {
-      // Stop the browser's default mini-infobar so we control the UI.
       e.preventDefault();
       setDeferredPrompt(e);
       setIsInstallable(true);
@@ -58,9 +51,8 @@ export function usePWAInstall() {
     if (!deferredPrompt) return { outcome: "unavailable" };
 
     deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice; // { outcome: "accepted" | "dismissed" }
+    const choice = await deferredPrompt.userChoice;
 
-    // The prompt can only be used once — clear it either way.
     setDeferredPrompt(null);
     setIsInstallable(false);
 
@@ -71,9 +63,9 @@ export function usePWAInstall() {
   }, [deferredPrompt]);
 
   return {
-    isInstallable,   // show a native "Install App" button
-    isInstalled,     // never show any install UI
-    isIos,           // show manual "Add to Home Screen" instructions instead
+    isInstallable,
+    isInstalled,
+    isIos,
     promptInstall,
   };
 }
