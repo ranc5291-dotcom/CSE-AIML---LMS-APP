@@ -12,6 +12,25 @@ import Events from "./pages/Events";
 import Funds from "./pages/Funds";
 import Gallery from "./pages/Gallery";
 
+const ROLE_ROUTES = {
+  student: "/student",
+  faculty: "/faculty",
+  placement: "/placement",
+  admin: "/admin",
+};
+
+// Root route ("/") — if a session already exists in AuthContext (restored
+// from localStorage on app load), skip Login entirely and go straight to
+// that user's dashboard. This is what prevents the PWA from showing the
+// login/role-select screen every time it's reopened despite an active session.
+function RootRoute() {
+  const { user } = useAuth();
+  if (user && ROLE_ROUTES[user.role]) {
+    return <Navigate to={ROLE_ROUTES[user.role]} replace />;
+  }
+  return <Login />;
+}
+
 function ProtectedRoute({ children, role }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/" />;
@@ -27,7 +46,7 @@ function AppContent() {
 
   return (
     <Routes>
-      <Route path="/" element={<Login />} />
+      <Route path="/" element={<RootRoute />} />
       <Route path="/student" element={
         <ProtectedRoute role="student"><StudentDashboard /></ProtectedRoute>
       } />
