@@ -1,14 +1,11 @@
-      // line 4 — old
-import { attendanceAPI, marksAPI, sendNotification } from "../utils/api";  // line 6 — new
 import { createContext, useContext, useState, useEffect } from "react";
 import { db } from "../utils/firebase";
 import {
   collection, onSnapshot, addDoc, deleteDoc,
   doc, serverTimestamp, query, orderBy, updateDoc,
 } from "firebase/firestore";
-
+import { attendanceAPI, marksAPI, sendNotification } from "../utils/api";
 import { uploadPlacementFile, deletePlacementFile } from "../utils/supabase";
-
 
 const LMSContext = createContext(null);
 
@@ -48,16 +45,8 @@ export function LMSProvider({ children }) {
   const [notes, setNotes]                 = useState([]);
   const [notesLoading, setNotesLoading]   = useState(true);
   const [assignments, setAssignments]     = useState([]);
-  const [attendance, setAttendance]       = useState({
-    STU001: { "Machine Learning": 85, "AI": 90, "Cloud Computing": 78, "Mobile App Dev": 92 },
-    STU002: { "DBMS": 88, "OS": 75, "Computer Networks": 91, "OOP with Java": 83 },
-    STU003: { "Mathematics I": 95, "Physics": 80, "C Programming": 88, "English": 100 },
-  });
-  const [marks, setMarks]                 = useState({
-    STU001: { "Machine Learning": { scored: 78, total: 100 }, "AI": { scored: 82, total: 100 }, "Cloud Computing": { scored: 74, total: 100 }, "Mobile App Dev": { scored: 88, total: 100 } },
-    STU002: { "DBMS": { scored: 85, total: 100 }, "OS": { scored: 70, total: 100 }, "Computer Networks": { scored: 90, total: 100 }, "OOP with Java": { scored: 77, total: 100 } },
-    STU003: { "Mathematics I": { scored: 92, total: 100 }, "Physics": { scored: 76, total: 100 }, "C Programming": { scored: 84, total: 100 }, "English": { scored: 95, total: 100 } },
-  });
+  const [attendance, setAttendance]       = useState({});
+  const [marks, setMarks]                 = useState({});
   const [events, setEvents]               = useState([]);
   const [notices, setNotices]             = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -67,18 +56,13 @@ export function LMSProvider({ children }) {
   const [galleryFallback, setGalleryFallback]   = useState([]);
   const gallery = [...galleryFallback, ...galleryFirestore];
 
-  const [fundRequests, setFundRequests]   = useState([
-    { id: 1, hostName: "Student Council", reason: "Annual Cultural Fest", totalAmount: 15000, perPerson: 300, totalStudents: 50, status: "Active", date: "2026-05-20" },
-  ]);
+  const [fundRequests, setFundRequests]   = useState([]);
   const [semResources, setSemResources]   = useState({});
   const [complaints, setComplaints]       = useState([]);
   const [companies, setCompanies]         = useState([]);
   const [companiesLoading, setCompaniesLoading] = useState(true);
   const [dsaList, setDsaList]             = useState([]);
-  const [aptitude, setAptitude]           = useState([
-    { id: "apt-1", question: "A train travels 60 km in 1 hour. How long to travel 300 km?", options: ["3 hrs", "4 hrs", "5 hrs", "6 hrs"], answer: 2 },
-    { id: "apt-2", question: "What is 15% of 200?", options: ["25", "30", "35", "40"], answer: 1 },
-  ]);
+  const [aptitude, setAptitude]           = useState([]);
   const [placementUploads, setPlacementUploads] = useState([]);
 
   // ── PROMOTIONS — notifies students when admin promotes them ──
@@ -108,39 +92,26 @@ export function LMSProvider({ children }) {
     // Assignments
     listen("assignments", setAssignments, []);
 
-    // Companies
+    // Companies — no fake seed data; empty means genuinely empty
     listen("companies", (data) => {
-      setCompanies(data.length > 0 ? data : [
-        { id: "g1", name: "Google",  role: "SWE Intern",       package: "₹12 LPA", deadline: "2026-06-01", status: "Open", eligibility: "8.0+ CGPA, No backlogs", description: "Software engineering internship", googleFormUrl: "" },
-        { id: "t1", name: "TCS",     role: "Systems Engineer",  package: "₹7 LPA",  deadline: "2026-06-10", status: "Open", eligibility: "6.0+ CGPA, 2026 batch",   description: "Systems engineering role",        googleFormUrl: "" },
-      ]);
+      setCompanies(data);
       setCompaniesLoading(false);
     }, []);
 
     // Notices — real-time (all roles see this)
     listen("notices", setNotices, []);
 
-    // Announcements
-    listen("announcements", (data) => {
-      setAnnouncements(data.length > 0 ? data : [
-        { id: "a1", title: "Mid Semester Exam Schedule Released", tag: "Exam",  postedBy: "Admin",      time: "2 hours ago" },
-        { id: "a2", title: "Guest Lecture on GenAI — Hall B, 3PM", tag: "Event", postedBy: "Dr. Sharma", time: "Today" },
-      ]);
-    }, []);
+    // Announcements — no fake seed data
+    listen("announcements", setAnnouncements, []);
 
     // Gallery — real-time (Firestore-synced portion only; local fallback is separate)
     listen("gallery", setGalleryFirestore, []);
 
-    // DSA
-    listen("dsa", (data) => {
-      setDsaList(data.length > 0 ? data : [
-        { id: "d1", title: "Two Sum",            difficulty: "Easy", topic: "Arrays",      link: "https://leetcode.com/problems/two-sum/" },
-        { id: "d2", title: "Merge K Sorted Lists", difficulty: "Hard", topic: "Linked List", link: "#" },
-      ]);
-    }, []);
+    // DSA — no fake seed data
+    listen("dsa", setDsaList, []);
 
-    // Aptitude
-    listen("aptitude", (data) => { if (data.length > 0) setAptitude(data); }, []);
+    // Aptitude — no fake seed data
+    listen("aptitude", setAptitude, []);
 
     // Placement uploads
     listen("placementUploads", setPlacementUploads, []);
@@ -148,21 +119,13 @@ export function LMSProvider({ children }) {
     // Promotions — real-time, so students see the popup as soon as admin promotes them
     listen("promotions", setPromotions, []);
 
-    // Events
-    listen("events", (data) => {
-      setEvents(data.length > 0 ? data : [
-        { id: "e1", title: "Hackathon 2026", desc: "24-hour coding.", date: "2026-06-05", time: "9:00 AM", venue: "Main Hall",     organizer: "Dr. Sharma", joined: [], tag: "Technical" },
-        { id: "e2", title: "AI Guest Lecture", desc: "Expert from Google.", date: "2026-05-28", time: "3:00 PM", venue: "Seminar Hall B", organizer: "Prof. Mehta", joined: [], tag: "Lecture" },
-      ]);
-    }, [], "date", "asc");
+    // Events — no fake seed data
+    listen("events", setEvents, [], "date", "asc");
 
-    // Complaints
-    listen("complaints", (data) => {
-      setComplaints(data.length > 0 ? data : [
-        { id: "c1", title: "Projector not working in Room 301", desc: "Non-functional for 2 weeks.", category: "Infrastructure", by: "Ram Kumar",    status: "Pending",     date: "2026-05-18" },
-        { id: "c2", title: "Wi-Fi very slow in lab",            desc: "Extremely slow.",             category: "Technical",      by: "Priya Sharma", status: "In Progress", date: "2026-05-20" },
-      ]);
-    }, []);
+    // Complaints — no fake seed data; this was the source of the sync
+    // confusion (Admin showed 0 while other sessions showed fake "Projector"
+    // / "Wi-Fi" placeholder complaints that were never real submissions).
+    listen("complaints", setComplaints, []);
 
     // Subjects
     try {
@@ -248,18 +211,17 @@ export function LMSProvider({ children }) {
   };
 
   // ── NOTES — Cloudinary + Firestore ───────────────────────────
+  // IMPORTANT: no blob-URL fallback here anymore. A blob: URL only exists in
+  // the uploader's own browser tab's memory — it goes dead the instant the
+  // page reloads or a new session starts. That's exactly why old notes
+  // "wouldn't open" — they were saved with URLs that were never valid for
+  // anyone but the original uploader, in that one session. If Cloudinary
+  // fails now, the upload fails loudly instead of silently saving a broken link.
   const addNote = async (noteData, file) => {
-  try {
     let fileUrl = null, fileName = noteData.file || "", fileSize = noteData.size || "";
     if (file) {
-      try {
-        const up = await uploadToCloudinary(file);
-        fileUrl = up.fileUrl; fileName = up.fileName; fileSize = up.fileSize;
-      } catch {
-        fileUrl  = URL.createObjectURL(file);
-        fileName = file.name;
-        fileSize = (file.size / 1024).toFixed(1) + " KB";
-      }
+      const up = await uploadToCloudinary(file); // throws on failure — caller sees the real error
+      fileUrl = up.fileUrl; fileName = up.fileName; fileSize = up.fileSize;
     }
     await addDoc(collection(db, "notes"), {
       subject: noteData.subject, type: noteData.type,
@@ -274,50 +236,32 @@ export function LMSProvider({ children }) {
       url: "/student/notes",
       role: "student",
     });
-  } catch (err) {
-    const local = { ...noteData, id: Date.now(), date: "Just now", fileUrl: file ? URL.createObjectURL(file) : null };
-    setNotes((p) => [local, ...p]);
-  }
-};
+  };
 
   const removeNote = async (id) => {
     try { await deleteDoc(doc(db, "notes", String(id))); } catch {}
     setNotes((p) => p.filter((n) => n.id !== id));
   };
 
-  // ── GALLERY — Cloudinary + Firestore, with local fallback on failure ──
+  // ── GALLERY — Cloudinary + Firestore, no blob fallback ──
   const addGalleryPhoto = async (photoData, file) => {
     let fileUrl = photoData.url || null;
     if (file) {
-      try {
-        const up = await uploadToCloudinary(file);
-        fileUrl = up.fileUrl;
-      } catch (cloudErr) {
-        console.warn("Gallery: Cloudinary upload failed, using local blob URL instead:", cloudErr.message);
-        fileUrl = URL.createObjectURL(file);
-      }
+      fileUrl = (await uploadToCloudinary(file)).fileUrl; // throws on failure — no more blob fallback
     }
 
     const dateStr = new Date().toLocaleDateString();
 
-    try {
-      await addDoc(collection(db, "gallery"), {
-        caption:    photoData.caption || "",
-        uploadedBy: photoData.uploadedBy || "",
-        category:   photoData.category || "General",
-        url:        fileUrl,
-        createdAt:  serverTimestamp(),
-        date:       dateStr,
-      });
-    } catch (err) {
-      console.error("Gallery upload failed to sync to Firestore:", err.code || "", err.message);
-      setGalleryFallback((p) => [
-        { id: "local-" + Date.now(), caption: photoData.caption || "", uploadedBy: photoData.uploadedBy || "", category: photoData.category || "General", url: fileUrl, date: dateStr },
-        ...p,
-      ]);
-      throw err;
-    }
+    await addDoc(collection(db, "gallery"), {
+      caption:    photoData.caption || "",
+      uploadedBy: photoData.uploadedBy || "",
+      category:   photoData.category || "General",
+      url:        fileUrl,
+      createdAt:  serverTimestamp(),
+      date:       dateStr,
+    });
   };
+
   const removeGalleryPhoto = async (id) => {
     if (typeof id === "string" && id.startsWith("local-")) {
       setGalleryFallback((p) => p.filter((g) => g.id !== id));
@@ -328,8 +272,7 @@ export function LMSProvider({ children }) {
   };
 
   // ── NOTICES ───────────────────────────────────────────────────
- const addNotice = async (notice) => {
-  try {
+  const addNotice = async (notice) => {
     await addDoc(collection(db, "notices"), {
       title:      notice.title,
       content:    notice.content || "",
@@ -345,10 +288,7 @@ export function LMSProvider({ children }) {
       body: notice.title,
       url: "/notices",
     });
-  } catch {
-    setNotices((p) => [{ ...notice, id: Date.now(), date: new Date().toLocaleDateString() }, ...p]);
-  }
-};
+  };
   const removeNotice = async (id) => {
     try { await deleteDoc(doc(db, "notices", String(id))); } catch {}
     setNotices((p) => p.filter((n) => n.id !== id));
@@ -356,7 +296,6 @@ export function LMSProvider({ children }) {
 
   // ── ANNOUNCEMENTS ─────────────────────────────────────────────
   const addAnnouncement = async (a) => {
-  try {
     await addDoc(collection(db, "announcements"), {
       title: a.title, tag: a.tag, postedBy: a.postedBy,
       time: new Date().toLocaleTimeString(), createdAt: serverTimestamp(),
@@ -366,10 +305,7 @@ export function LMSProvider({ children }) {
       body: a.title,
       url: "/announcements",
     });
-  } catch {
-    setAnnouncements((p) => [{ ...a, id: Date.now(), time: "Just now" }, ...p]);
-  }
-};
+  };
   const removeAnnouncement = async (id) => {
     try { await deleteDoc(doc(db, "announcements", String(id))); } catch {}
     setAnnouncements((p) => p.filter((a) => a.id !== id));
@@ -421,12 +357,12 @@ export function LMSProvider({ children }) {
   };
 
   // ── ASSIGNMENTS ───────────────────────────────────────────────
-const addAssignment = async (data, file = null) => {
-  try {
+  // No blob fallback — same reasoning as addNote above.
+  const addAssignment = async (data, file = null) => {
     let fileUrl = null, fileName = null;
     if (file) {
-      try { const up = await uploadToCloudinary(file); fileUrl = up.fileUrl; fileName = up.fileName; }
-      catch { fileUrl = URL.createObjectURL(file); fileName = file.name; }
+      const up = await uploadToCloudinary(file);
+      fileUrl = up.fileUrl; fileName = up.fileName;
     }
     await addDoc(collection(db, "assignments"), { ...data, fileUrl, file: fileName, createdAt: serverTimestamp() });
     sendNotification({
@@ -435,10 +371,7 @@ const addAssignment = async (data, file = null) => {
       url: "/student/assignments",
       role: "student",
     });
-  } catch {
-    setAssignments((p) => [{ ...data, id: Date.now() }, ...p]);
-  }
-};
+  };
   const removeAssignment = async (id) => {
     try { await deleteDoc(doc(db, "assignments", String(id))); } catch {}
     setAssignments((p) => p.filter((a) => a.id !== id));
@@ -446,8 +379,7 @@ const addAssignment = async (data, file = null) => {
 
   // ── EVENTS ────────────────────────────────────────────────────
   const addEvent = async (event, organizer = "") => {
-    try { await addDoc(collection(db, "events"), { ...event, organizer, joined: [], createdAt: serverTimestamp() }); }
-    catch { setEvents((p) => [{ ...event, id: Date.now(), joined: [] }, ...p]); }
+    await addDoc(collection(db, "events"), { ...event, organizer, joined: [], createdAt: serverTimestamp() });
   };
   const removeEvent = async (id) => {
     try { await deleteDoc(doc(db, "events", String(id))); } catch {}
@@ -463,15 +395,11 @@ const addAssignment = async (data, file = null) => {
 
   // ── COMPLAINTS ────────────────────────────────────────────────
   const addComplaint = async (c) => {
-    try {
-      await addDoc(collection(db, "complaints"), {
-        ...c, status: "Pending",
-        date: new Date().toISOString().split("T")[0],
-        createdAt: serverTimestamp(),
-      });
-    } catch {
-      setComplaints((p) => [{ ...c, id: Date.now(), status: "Pending", date: new Date().toISOString().split("T")[0] }, ...p]);
-    }
+    await addDoc(collection(db, "complaints"), {
+      ...c, status: "Pending",
+      date: new Date().toISOString().split("T")[0],
+      createdAt: serverTimestamp(),
+    });
   };
   const updateComplaintStatus = async (id, status) => {
     try { await updateDoc(doc(db, "complaints", String(id)), { status }); } catch {}
@@ -484,8 +412,7 @@ const addAssignment = async (data, file = null) => {
 
   // ── COMPANIES ─────────────────────────────────────────────────
   const addCompany = async (c) => {
-    try { await addDoc(collection(db, "companies"), { ...c, createdAt: serverTimestamp() }); }
-    catch { setCompanies((p) => [{ ...c, id: String(Date.now()) }, ...p]); }
+    await addDoc(collection(db, "companies"), { ...c, createdAt: serverTimestamp() });
   };
   const removeCompany = async (id) => {
     try { await deleteDoc(doc(db, "companies", String(id))); } catch {}
@@ -501,36 +428,35 @@ const addAssignment = async (data, file = null) => {
   const removeSemResource = (sem, id)  => setSemResources((p) => ({ ...p, [sem]: (p[sem] || []).filter((r) => r.id !== id) }));
 
   // ── DSA ───────────────────────────────────────────────────────
-  const addDsa    = async (d) => { try { await addDoc(collection(db, "dsa"), { ...d, createdAt: serverTimestamp() }); } catch { setDsaList((p) => [{ ...d, id: Date.now() }, ...p]); } };
+  const addDsa    = async (d) => { await addDoc(collection(db, "dsa"), { ...d, createdAt: serverTimestamp() }); };
   const removeDsa = async (id) => { try { await deleteDoc(doc(db, "dsa", String(id))); } catch {} setDsaList((p) => p.filter((d) => d.id !== id)); };
 
   // ── APTITUDE ──────────────────────────────────────────────────
-  const addAptitude    = async (q) => { try { await addDoc(collection(db, "aptitude"), { ...q, createdAt: serverTimestamp() }); } catch { setAptitude((p) => [{ ...q, id: Date.now() }, ...p]); } };
+  const addAptitude    = async (q) => { await addDoc(collection(db, "aptitude"), { ...q, createdAt: serverTimestamp() }); };
   const removeAptitude = async (id) => { try { await deleteDoc(doc(db, "aptitude", String(id))); } catch {} setAptitude((p) => p.filter((q) => q.id !== id)); };
 
-  // ── PLACEMENT UPLOADS — now uses Supabase Storage, no blob-URL fallback ──
+  // ── PLACEMENT UPLOADS — uses Supabase Storage, no blob-URL fallback ──
   const addPlacementUpload = async (item, file = null) => {
-  let fileUrl  = item.fileUrl || null;
-  let fileName = item.fileName || null;
+    let fileUrl  = item.fileUrl || null;
+    let fileName = item.fileName || null;
 
-  if (file) {
-    const up = await uploadPlacementFile(file);
-    fileUrl  = up.fileUrl;
-    fileName = up.fileName;
-  }
+    if (file) {
+      const up = await uploadPlacementFile(file);
+      fileUrl  = up.fileUrl;
+      fileName = up.fileName;
+    }
 
-  const payload = {
-    category:   item.category,
-    title:      item.title,
-    fileName,
-    fileUrl,
-    link:       item.link || null,
-    status:     item.status || null,
-    uploadedBy: item.uploadedBy,
-    date:       item.date || new Date().toISOString().split("T")[0],
-  };
+    const payload = {
+      category:   item.category,
+      title:      item.title,
+      fileName,
+      fileUrl,
+      link:       item.link || null,
+      status:     item.status || null,
+      uploadedBy: item.uploadedBy,
+      date:       item.date || new Date().toISOString().split("T")[0],
+    };
 
-  try {
     await addDoc(collection(db, "placementUploads"), { ...payload, createdAt: serverTimestamp() });
     sendNotification({
       title: `New Placement Resource — ${item.category}`,
@@ -538,15 +464,10 @@ const addAssignment = async (data, file = null) => {
       url: "/student/placement",
       role: "student",
     });
-  } catch (err) {
-    console.warn("addPlacementUpload (Firestore write failed):", err.message);
-    setPlacementUploads((p) => [{ ...payload, id: Date.now() }, ...p]);
-  }
-};
+  };
 
   const removePlacementUpload = async (id) => {
     try {
-      // Look up the item first so we can also delete its file from Storage
       const item = placementUploads.find((u) => u.id === id);
       if (item?.fileUrl) await deletePlacementFile(item.fileUrl);
       await deleteDoc(doc(db, "placementUploads", String(id)));
@@ -567,12 +488,7 @@ const addAssignment = async (data, file = null) => {
       toSem:       promo.toSem || "",
       acknowledged: false,
     };
-    try {
-      await addDoc(collection(db, "promotions"), { ...payload, createdAt: serverTimestamp() });
-    } catch (err) {
-      console.warn("addPromotion:", err.message);
-      setPromotions((p) => [{ ...payload, id: "local-" + Date.now() }, ...p]);
-    }
+    await addDoc(collection(db, "promotions"), { ...payload, createdAt: serverTimestamp() });
   };
 
   const acknowledgePromotion = async (id) => {

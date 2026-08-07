@@ -8,6 +8,9 @@ import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   onAuthStateChanged,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -75,6 +78,15 @@ export async function verifyOTP(otp) {
   const result = await window.confirmationResult.confirm(otp);
   const token  = await result.user.getIdToken();
   return { user: result.user, token };
+}
+
+ export async function firebaseChangePassword(currentPassword, newPassword) {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw new Error("No authenticated email/password user.");
+
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential); // throws if currentPassword is wrong
+  await updatePassword(user, newPassword);
 }
 
 // ── Auth State Listener ───────────────────────────────────────

@@ -16,16 +16,25 @@ export default function ComplaintBox() {
   const [category, setCategory]     = useState("");
   const [desc, setDesc]             = useState("");
   const [success, setSuccess]       = useState("");
+  const [error, setError]           = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter]         = useState("All");
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!title || !category || !desc) return;
-    addComplaint({ title, category, desc, by: user?.name });
-    setTitle(""); setCategory(""); setDesc("");
-    setShowForm(false);
-    setSuccess("Complaint submitted successfully!");
-    saveComplaint({ title, category, desc, by: user?.name, userId: user?.id });
-    setTimeout(() => setSuccess(""), 3000);
+    setError("");
+    setSubmitting(true);
+    try {
+      await addComplaint({ title, category, desc, by: user?.name });
+      saveComplaint({ title, category, desc, by: user?.name, userId: user?.id }); // fire-and-forget Supabase log
+      setTitle(""); setCategory(""); setDesc("");
+      setShowForm(false);
+      setSuccess("Complaint submitted successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError("Failed to submit complaint: " + (err.message || "Please try again."));
+    }
+    setSubmitting(false);
   };
 
   const filtered = filter === "All" ? complaints : complaints.filter((c) => c.status === filter);
@@ -47,6 +56,12 @@ export default function ComplaintBox() {
           {success && (
             <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm">
               ✅ {success}
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">
+              ⚠️ {error}
             </div>
           )}
 
@@ -80,9 +95,9 @@ export default function ComplaintBox() {
               <textarea value={desc} onChange={(e) => setDesc(e.target.value)}
                 placeholder="Describe your complaint in detail..." rows={4}
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-rose-500 text-sm resize-none" />
-              <button onClick={handleSubmit} disabled={!title || !category || !desc}
+              <button onClick={handleSubmit} disabled={!title || !category || !desc || submitting}
                 className="w-full py-3 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-all cursor-pointer">
-                Submit Complaint
+                {submitting ? "Submitting..." : "Submit Complaint"}
               </button>
             </div>
           )}

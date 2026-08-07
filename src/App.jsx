@@ -11,6 +11,7 @@ import ComplaintBox from "./pages/ComplaintBox";
 import Events from "./pages/Events";
 import Funds from "./pages/Funds";
 import Gallery from "./pages/Gallery";
+import Settings from "./pages/Settings";
 
 const ROLE_ROUTES = {
   student: "/student",
@@ -72,6 +73,9 @@ function AppContent() {
       } />
       <Route path="/gallery" element={
         <ProtectedRoute><Gallery /></ProtectedRoute>
+      } />
+      <Route path="/settings" element={
+        <ProtectedRoute><Settings /></ProtectedRoute>
       } />
     </Routes>
   );

@@ -3,6 +3,7 @@ import {
   firebaseLogin,
   firebaseRegister,
   firebaseForgotPassword,
+  firebaseChangePassword,
   firebaseLogout,
   onAuthChange,
 } from "../utils/firebase";
@@ -211,6 +212,26 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // ── CHANGE PASSWORD (in-app, requires current password) ────────
+  // Only works for accounts that have a real Firebase email/password
+  // login (i.e. user.uid is set). Phone-OTP accounts don't have a
+  // password at all, so the Settings page hides this option for them.
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    try {
+      await firebaseChangePassword(currentPassword, newPassword);
+      return { success: true };
+    } catch (err) {
+      const code = err?.code || "";
+      if (code.includes("wrong-password") || code.includes("invalid-credential")) {
+        return { success: false, error: "Current password is incorrect." };
+      }
+      if (code.includes("weak-password")) {
+        return { success: false, error: "New password must be at least 6 characters." };
+      }
+      return { success: false, error: err.message || "Could not change password." };
+    }
+  }, []);
+
   // ── REGISTER USER (students + staff) — email always required ──
   const registerUser = useCallback(async (userData) => {
     try {
@@ -358,6 +379,7 @@ export function AuthProvider({ children }) {
       login,
       logout,
       forgotPassword,
+      changePassword,
       registerUser,
       updateStudentStatus,
       promoteStudent,
