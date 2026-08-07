@@ -1,3 +1,5 @@
+import { attendanceAPI, marksAPI } from "../utils/api";        // line 4 — old
+import { attendanceAPI, marksAPI, sendNotification } from "../utils/api";  // line 6 — new
 import { createContext, useContext, useState, useEffect } from "react";
 import { db } from "../utils/firebase";
 import {
@@ -6,7 +8,7 @@ import {
 } from "firebase/firestore";
 import { attendanceAPI, marksAPI } from "../utils/api";
 import { uploadPlacementFile, deletePlacementFile } from "../utils/supabase";
-import { attendanceAPI, marksAPI, sendNotification } from "../utils/api";
+
 
 const LMSContext = createContext(null);
 
