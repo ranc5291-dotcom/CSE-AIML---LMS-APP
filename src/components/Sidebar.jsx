@@ -14,6 +14,7 @@ const NAV_ITEMS = {
     { icon: "💼", label: "Placements",  path: "/student", tab: "Placement" },
     { icon: "📸", label: "Gallery",     path: "/gallery" },
     { icon: "💰", label: "Funds",       path: "/funds" },
+    { icon: "⚙️", label: "Settings",    path: "/settings" },
   ],
   faculty: [
     { icon: "🏠", label: "Dashboard",       path: "/faculty" },
@@ -26,6 +27,7 @@ const NAV_ITEMS = {
     { icon: "📸", label: "Gallery",         path: "/gallery" },
     { icon: "💬", label: "Complaints",      path: "/complaints" },
     { icon: "💰", label: "Funds",           path: "/funds" },
+    { icon: "⚙️", label: "Settings",        path: "/settings" },
   ],
   placement: [
     { icon: "🏠", label: "Dashboard",     path: "/placement" },
@@ -33,6 +35,7 @@ const NAV_ITEMS = {
     { icon: "🧠", label: "DSA Questions", path: "/placement" },
     { icon: "📝", label: "Aptitude Test", path: "/placement" },
     { icon: "📤", label: "Upload Data",   path: "/placement" },
+    { icon: "⚙️", label: "Settings",      path: "/settings" },
   ],
   admin: [
     { icon: "🏠", label: "Overview",           path: "/admin" },
@@ -43,6 +46,7 @@ const NAV_ITEMS = {
     { icon: "📣", label: "Events",             path: "/events" },
     { icon: "💰", label: "Funds",              path: "/funds" },
     { icon: "💬", label: "Complaint Box",      path: "/complaints" },
+    { icon: "⚙️", label: "Settings",           path: "/settings" },
   ],
 };
 
