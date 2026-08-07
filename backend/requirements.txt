@@ -8,3 +8,4 @@ passlib[bcrypt]
 bcrypt
 firebase-admin
 cloudinary
+python-multipart
