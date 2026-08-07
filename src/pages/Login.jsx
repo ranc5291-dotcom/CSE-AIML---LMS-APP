@@ -383,6 +383,64 @@ function StaffRegisterForm({ role, onBack, onSuccess }) {
   );
 }
 
+// ── FORGOT PASSWORD BLOCK ────────────────────────────────────
+function ForgotPasswordBlock({ onBack }) {
+  const { forgotPassword } = useAuth();
+  const [email, setEmail]     = useState("");
+  const [error, setError]     = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSend = async () => {
+    setError(""); setSuccess("");
+    if (!isEmail(email)) { setError("Please enter a valid email address."); return; }
+
+    setLoading(true);
+    const result = await forgotPassword(email.trim());
+    setLoading(false);
+
+    if (result.success) {
+      setSuccess("✅ Reset link sent! Check your email inbox (and spam folder).");
+    } else {
+      setError(result.error || "Could not send reset email. Please try again.");
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-white font-semibold text-sm">🔑 Reset Password</h2>
+        <button onClick={onBack} className="text-gray-400 hover:text-white text-xs cursor-pointer">← Back to Sign In</button>
+      </div>
+
+      <p className="text-gray-500 text-xs">
+        Enter the email address linked to your account. We'll send you a link to reset your password.
+      </p>
+
+      {success && <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm">{success}</div>}
+      {error   && <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>}
+
+      {!success && (
+        <>
+          <Field
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="name@gmail.com"
+            required
+          />
+          <button onClick={handleSend} disabled={loading}
+            className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 disabled:opacity-50 text-white rounded-xl text-sm font-semibold cursor-pointer shadow-lg">
+            {loading ? "Sending..." : "Send Reset Link"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── SIGN IN FORM ──────────────────────────────────────────────
 function SignInForm({ role, prefilledId, onRegister }) {
   const { login } = useAuth();
@@ -396,6 +454,7 @@ function SignInForm({ role, prefilledId, onRegister }) {
   const [otpLoading, setOtpLoading] = useState(false);
   const [error, setError]           = useState("");
   const [loading, setLoading]       = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   const phoneDetected = isPhone(identifier) && identifier.trim().length >= 8;
   const emailDetected = isEmail(identifier);
@@ -436,6 +495,10 @@ function SignInForm({ role, prefilledId, onRegister }) {
     setLoading(false);
   };
 
+  if (showForgot) {
+    return <ForgotPasswordBlock onBack={() => setShowForgot(false)} />;
+  }
+
   return (
     <div className="space-y-3">
       <div>
@@ -458,6 +521,10 @@ function SignInForm({ role, prefilledId, onRegister }) {
             onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             placeholder="Enter your password"
             className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-sm" />
+          <button onClick={() => setShowForgot(true)}
+            className="text-blue-400 hover:text-blue-300 text-xs mt-1.5 cursor-pointer transition-colors">
+            Forgot password?
+          </button>
         </div>
       )}
 
