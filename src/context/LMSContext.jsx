@@ -1,4 +1,4 @@
-import { attendanceAPI, marksAPI } from "../utils/api";        // line 4 — old
+      // line 4 — old
 import { attendanceAPI, marksAPI, sendNotification } from "../utils/api";  // line 6 — new
 import { createContext, useContext, useState, useEffect } from "react";
 import { db } from "../utils/firebase";
@@ -6,7 +6,7 @@ import {
   collection, onSnapshot, addDoc, deleteDoc,
   doc, serverTimestamp, query, orderBy, updateDoc,
 } from "firebase/firestore";
-import { attendanceAPI, marksAPI } from "../utils/api";
+
 import { uploadPlacementFile, deletePlacementFile } from "../utils/supabase";
 
 
