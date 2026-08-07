@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import { attendanceAPI, marksAPI } from "../utils/api";
 import { uploadPlacementFile, deletePlacementFile } from "../utils/supabase";
+import { attendanceAPI, marksAPI, sendNotification } from "../utils/api";
 
 const LMSContext = createContext(null);
 
@@ -246,30 +247,36 @@ export function LMSProvider({ children }) {
 
   // ── NOTES — Cloudinary + Firestore ───────────────────────────
   const addNote = async (noteData, file) => {
-    try {
-      let fileUrl = null, fileName = noteData.file || "", fileSize = noteData.size || "";
-      if (file) {
-        try {
-          const up = await uploadToCloudinary(file);
-          fileUrl = up.fileUrl; fileName = up.fileName; fileSize = up.fileSize;
-        } catch {
-          fileUrl  = URL.createObjectURL(file);
-          fileName = file.name;
-          fileSize = (file.size / 1024).toFixed(1) + " KB";
-        }
+  try {
+    let fileUrl = null, fileName = noteData.file || "", fileSize = noteData.size || "";
+    if (file) {
+      try {
+        const up = await uploadToCloudinary(file);
+        fileUrl = up.fileUrl; fileName = up.fileName; fileSize = up.fileSize;
+      } catch {
+        fileUrl  = URL.createObjectURL(file);
+        fileName = file.name;
+        fileSize = (file.size / 1024).toFixed(1) + " KB";
       }
-      await addDoc(collection(db, "notes"), {
-        subject: noteData.subject, type: noteData.type,
-        sem: noteData.sem, uploadedBy: noteData.uploadedBy,
-        file: fileName, fileUrl, size: fileSize,
-        createdAt: serverTimestamp(),
-        date: new Date().toLocaleDateString(),
-      });
-    } catch (err) {
-      const local = { ...noteData, id: Date.now(), date: "Just now", fileUrl: file ? URL.createObjectURL(file) : null };
-      setNotes((p) => [local, ...p]);
     }
-  };
+    await addDoc(collection(db, "notes"), {
+      subject: noteData.subject, type: noteData.type,
+      sem: noteData.sem, uploadedBy: noteData.uploadedBy,
+      file: fileName, fileUrl, size: fileSize,
+      createdAt: serverTimestamp(),
+      date: new Date().toLocaleDateString(),
+    });
+    sendNotification({
+      title: `New ${noteData.type} — ${noteData.subject}`,
+      body: `Uploaded for ${noteData.sem}`,
+      url: "/student/notes",
+      role: "student",
+    });
+  } catch (err) {
+    const local = { ...noteData, id: Date.now(), date: "Just now", fileUrl: file ? URL.createObjectURL(file) : null };
+    setNotes((p) => [local, ...p]);
+  }
+};
 
   const removeNote = async (id) => {
     try { await deleteDoc(doc(db, "notes", String(id))); } catch {}
@@ -319,22 +326,27 @@ export function LMSProvider({ children }) {
   };
 
   // ── NOTICES ───────────────────────────────────────────────────
-  const addNotice = async (notice) => {
-    try {
-      await addDoc(collection(db, "notices"), {
-        title:      notice.title,
-        content:    notice.content || "",
-        tag:        notice.tag || "Notice",
-        postedBy:   notice.postedBy,
-        postedRole: notice.postedRole || "admin",
-        createdAt:  serverTimestamp(),
-        date:       new Date().toLocaleDateString(),
-        time:       new Date().toLocaleTimeString(),
-      });
-    } catch {
-      setNotices((p) => [{ ...notice, id: Date.now(), date: new Date().toLocaleDateString() }, ...p]);
-    }
-  };
+ const addNotice = async (notice) => {
+  try {
+    await addDoc(collection(db, "notices"), {
+      title:      notice.title,
+      content:    notice.content || "",
+      tag:        notice.tag || "Notice",
+      postedBy:   notice.postedBy,
+      postedRole: notice.postedRole || "admin",
+      createdAt:  serverTimestamp(),
+      date:       new Date().toLocaleDateString(),
+      time:       new Date().toLocaleTimeString(),
+    });
+    sendNotification({
+      title: `Notice: ${notice.tag || "New"}`,
+      body: notice.title,
+      url: "/notices",
+    });
+  } catch {
+    setNotices((p) => [{ ...notice, id: Date.now(), date: new Date().toLocaleDateString() }, ...p]);
+  }
+};
   const removeNotice = async (id) => {
     try { await deleteDoc(doc(db, "notices", String(id))); } catch {}
     setNotices((p) => p.filter((n) => n.id !== id));
@@ -342,15 +354,20 @@ export function LMSProvider({ children }) {
 
   // ── ANNOUNCEMENTS ─────────────────────────────────────────────
   const addAnnouncement = async (a) => {
-    try {
-      await addDoc(collection(db, "announcements"), {
-        title: a.title, tag: a.tag, postedBy: a.postedBy,
-        time: new Date().toLocaleTimeString(), createdAt: serverTimestamp(),
-      });
-    } catch {
-      setAnnouncements((p) => [{ ...a, id: Date.now(), time: "Just now" }, ...p]);
-    }
-  };
+  try {
+    await addDoc(collection(db, "announcements"), {
+      title: a.title, tag: a.tag, postedBy: a.postedBy,
+      time: new Date().toLocaleTimeString(), createdAt: serverTimestamp(),
+    });
+    sendNotification({
+      title: `Announcement: ${a.tag || "New"}`,
+      body: a.title,
+      url: "/announcements",
+    });
+  } catch {
+    setAnnouncements((p) => [{ ...a, id: Date.now(), time: "Just now" }, ...p]);
+  }
+};
   const removeAnnouncement = async (id) => {
     try { await deleteDoc(doc(db, "announcements", String(id))); } catch {}
     setAnnouncements((p) => p.filter((a) => a.id !== id));
@@ -402,18 +419,24 @@ export function LMSProvider({ children }) {
   };
 
   // ── ASSIGNMENTS ───────────────────────────────────────────────
-  const addAssignment = async (data, file = null) => {
-    try {
-      let fileUrl = null, fileName = null;
-      if (file) {
-        try { const up = await uploadToCloudinary(file); fileUrl = up.fileUrl; fileName = up.fileName; }
-        catch { fileUrl = URL.createObjectURL(file); fileName = file.name; }
-      }
-      await addDoc(collection(db, "assignments"), { ...data, fileUrl, file: fileName, createdAt: serverTimestamp() });
-    } catch {
-      setAssignments((p) => [{ ...data, id: Date.now() }, ...p]);
+const addAssignment = async (data, file = null) => {
+  try {
+    let fileUrl = null, fileName = null;
+    if (file) {
+      try { const up = await uploadToCloudinary(file); fileUrl = up.fileUrl; fileName = up.fileName; }
+      catch { fileUrl = URL.createObjectURL(file); fileName = file.name; }
     }
-  };
+    await addDoc(collection(db, "assignments"), { ...data, fileUrl, file: fileName, createdAt: serverTimestamp() });
+    sendNotification({
+      title: `New Assignment — ${data.subject || data.title}`,
+      body: data.due ? `Due ${data.due}` : "Check the assignment details",
+      url: "/student/assignments",
+      role: "student",
+    });
+  } catch {
+    setAssignments((p) => [{ ...data, id: Date.now() }, ...p]);
+  }
+};
   const removeAssignment = async (id) => {
     try { await deleteDoc(doc(db, "assignments", String(id))); } catch {}
     setAssignments((p) => p.filter((a) => a.id !== id));
@@ -485,37 +508,39 @@ export function LMSProvider({ children }) {
 
   // ── PLACEMENT UPLOADS — now uses Supabase Storage, no blob-URL fallback ──
   const addPlacementUpload = async (item, file = null) => {
-    let fileUrl  = item.fileUrl || null;
-    let fileName = item.fileName || null;
+  let fileUrl  = item.fileUrl || null;
+  let fileName = item.fileName || null;
 
-    if (file) {
-      // No try/catch swallow here on purpose: if this fails, we want the
-      // caller (PlacementDashboard's handleUpload) to see the real error
-      // via its own catch block, instead of silently saving a blob URL
-      // that would break for every other user.
-      const up = await uploadPlacementFile(file);
-      fileUrl  = up.fileUrl;
-      fileName = up.fileName;
-    }
+  if (file) {
+    const up = await uploadPlacementFile(file);
+    fileUrl  = up.fileUrl;
+    fileName = up.fileName;
+  }
 
-    const payload = {
-      category:   item.category,
-      title:      item.title,
-      fileName,
-      fileUrl,
-      link:       item.link || null,
-      status:     item.status || null,
-      uploadedBy: item.uploadedBy,
-      date:       item.date || new Date().toISOString().split("T")[0],
-    };
-
-    try {
-      await addDoc(collection(db, "placementUploads"), { ...payload, createdAt: serverTimestamp() });
-    } catch (err) {
-      console.warn("addPlacementUpload (Firestore write failed):", err.message);
-      setPlacementUploads((p) => [{ ...payload, id: Date.now() }, ...p]);
-    }
+  const payload = {
+    category:   item.category,
+    title:      item.title,
+    fileName,
+    fileUrl,
+    link:       item.link || null,
+    status:     item.status || null,
+    uploadedBy: item.uploadedBy,
+    date:       item.date || new Date().toISOString().split("T")[0],
   };
+
+  try {
+    await addDoc(collection(db, "placementUploads"), { ...payload, createdAt: serverTimestamp() });
+    sendNotification({
+      title: `New Placement Resource — ${item.category}`,
+      body: item.title,
+      url: "/student/placement",
+      role: "student",
+    });
+  } catch (err) {
+    console.warn("addPlacementUpload (Firestore write failed):", err.message);
+    setPlacementUploads((p) => [{ ...payload, id: Date.now() }, ...p]);
+  }
+};
 
   const removePlacementUpload = async (id) => {
     try {

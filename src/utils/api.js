@@ -5,6 +5,21 @@
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+export async function sendNotification({ title, body, url = "/", role = null, userIds = null }) {
+  try {
+    const res = await fetch(`${BASE_URL}/notifications/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, body, url, role, userIds }),
+    });
+    if (!res.ok) console.warn("Notification send failed:", await res.text());
+    return res.ok;
+  } catch (err) {
+    console.warn("Notification send error:", err.message);
+    return false;
+  }
+}
+
 // ── Helper ────────────────────────────────────────────────────
 function getToken() {
   return localStorage.getItem("lms_token");
