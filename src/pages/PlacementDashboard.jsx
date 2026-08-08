@@ -162,7 +162,7 @@ export default function PlacementDashboard() {
   }, {});
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-[var(--color-bg-app)] overflow-hidden">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -171,8 +171,8 @@ export default function PlacementDashboard() {
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
 
           {/* Hero Banner */}
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-2xl p-5 text-white">
-            <p className="text-amber-100 text-sm mb-1">Placement Portal 💼</p>
+          <div className="bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] rounded-2xl p-5 text-white">
+            <p className="text-white/80 text-sm mb-1">Placement Portal 💼</p>
             <h2 className="text-2xl font-bold">{user?.name}</h2>
           </div>
 
@@ -184,8 +184,8 @@ export default function PlacementDashboard() {
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer
                   ${activeTab === tab
-                    ? "bg-amber-600 text-white"
-                    : "bg-gray-800 text-gray-400 hover:text-white"}`}
+                    ? "bg-[var(--color-accent-solid)] text-white"
+                    : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
               >
                 {tab}
               </button>
@@ -197,13 +197,13 @@ export default function PlacementDashboard() {
             <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-gray-500 text-xs font-medium">Sort by:</span>
+                  <span className="text-[var(--color-text-muted)] text-xs font-medium">Sort by:</span>
                   {COMPANY_SORT_OPTIONS.map((opt) => (
                     <button
                       key={opt.key}
                       onClick={() => toggleCompanySort(opt.key)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all flex items-center gap-1
-                        ${companySortBy === opt.key ? "bg-amber-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                        ${companySortBy === opt.key ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
                       {opt.label}
                       {companySortBy === opt.key && <span>{companySortDir === "asc" ? "▲" : "▼"}</span>}
                     </button>
@@ -212,7 +212,7 @@ export default function PlacementDashboard() {
                 {isOfficer && (
                   <button
                     onClick={() => setShowCompanyForm(!showCompanyForm)}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
+                    className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
                   >
                     {showCompanyForm ? "✕ Cancel" : "+ Add Company"}
                   </button>
@@ -220,8 +220,8 @@ export default function PlacementDashboard() {
               </div>
 
               {showCompanyForm && isOfficer && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-white font-semibold">🏢 Add Company</h3>
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">🏢 Add Company</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     {[
                       { key: "name",    placeholder: "Company name *" },
@@ -233,19 +233,19 @@ export default function PlacementDashboard() {
                         value={newCompany[key]}
                         onChange={(e) => setNewCompany({ ...newCompany, [key]: e.target.value })}
                         placeholder={placeholder}
-                        className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                        className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                       />
                     ))}
                     <input
                       type="date"
                       value={newCompany.deadline}
                       onChange={(e) => setNewCompany({ ...newCompany, deadline: e.target.value })}
-                      className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
+                      className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)]"
                     />
                     <select
                       value={newCompany.status}
                       onChange={(e) => setNewCompany({ ...newCompany, status: e.target.value })}
-                      className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
+                      className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer"
                     >
                       <option>Open</option>
                       <option>Closed</option>
@@ -253,30 +253,30 @@ export default function PlacementDashboard() {
                   </div>
 
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Eligibility Criteria</label>
+                    <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Eligibility Criteria</label>
                     <input
                       value={newCompany.eligibility}
                       onChange={(e) => setNewCompany({ ...newCompany, eligibility: e.target.value })}
                       placeholder="e.g. 8.0+ CGPA, No active backlogs, 2026 batch only"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                      className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                     />
                   </div>
 
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Job Description</label>
+                    <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Job Description</label>
                     <textarea
                       value={newCompany.description}
                       onChange={(e) => setNewCompany({ ...newCompany, description: e.target.value })}
                       placeholder="Brief description of the role..."
                       rows={2}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600 resize-none"
+                      className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)] resize-none"
                     />
                   </div>
 
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">
+                    <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">
                       Google Form URL{" "}
-                      <span className="text-gray-600">
+                      <span className="text-[var(--color-text-muted)]">
                         (students will be redirected here when they click Apply)
                       </span>
                     </label>
@@ -284,13 +284,13 @@ export default function PlacementDashboard() {
                       value={newCompany.googleFormUrl}
                       onChange={(e) => setNewCompany({ ...newCompany, googleFormUrl: e.target.value })}
                       placeholder="https://forms.gle/your-application-form"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                      className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                     />
                   </div>
 
                   <button
                     onClick={handleAddCompany}
-                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                    className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
                   >
                     + Add Company
                   </button>
@@ -299,14 +299,14 @@ export default function PlacementDashboard() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {sortedCompanies.length === 0 && (
-                  <p className="text-gray-600 text-sm col-span-2">No companies added yet.</p>
+                  <p className="text-[var(--color-text-muted)] text-sm col-span-2">No companies added yet.</p>
                 )}
                 {sortedCompanies.map((c) => (
-                  <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
+                  <div key={c.id} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="text-white font-bold text-base">{c.name}</h4>
-                        <p className="text-gray-400 text-sm">{c.role}</p>
+                        <h4 className="text-[var(--color-text-primary)] font-bold text-base">{c.name}</h4>
+                        <p className="text-[var(--color-text-secondary)] text-sm">{c.role}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <span
@@ -320,7 +320,7 @@ export default function PlacementDashboard() {
                         {isOfficer && (
                           <button
                             onClick={() => removeCompany(c.id)}
-                            className="text-gray-600 hover:text-red-400 cursor-pointer transition-colors"
+                            className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer transition-colors"
                           >
                             🗑️
                           </button>
@@ -329,7 +329,7 @@ export default function PlacementDashboard() {
                     </div>
 
                     {c.description && (
-                      <p className="text-gray-400 text-xs leading-relaxed">{c.description}</p>
+                      <p className="text-[var(--color-text-secondary)] text-xs leading-relaxed">{c.description}</p>
                     )}
 
                     {c.eligibility && (
@@ -339,7 +339,7 @@ export default function PlacementDashboard() {
                       </div>
                     )}
 
-                    <div className="flex flex-wrap gap-3 text-xs text-gray-400">
+                    <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)]">
                       <span>💰 {c.package}</span>
                       {c.deadline && <span>📅 Deadline: {c.deadline}</span>}
                     </div>
@@ -353,7 +353,7 @@ export default function PlacementDashboard() {
                             alert("Application form not set up yet. Contact the Placement Officer.");
                           }
                         }}
-                        className="w-full py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-medium transition-all cursor-pointer"
+                        className="w-full py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-xs font-medium transition-all cursor-pointer"
                       >
                         {c.googleFormUrl ? "📋 Apply Now → Open Google Form" : "Apply Now →"}
                       </button>
@@ -371,7 +371,7 @@ export default function PlacementDashboard() {
                 <div className="flex justify-end">
                   <button
                     onClick={() => setShowDsaForm(!showDsaForm)}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
+                    className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
                   >
                     {showDsaForm ? "✕ Cancel" : "+ Add Question"}
                   </button>
@@ -379,25 +379,25 @@ export default function PlacementDashboard() {
               )}
 
               {showDsaForm && isOfficer && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
-                  <h3 className="text-white font-semibold">➕ Add DSA Question</h3>
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">➕ Add DSA Question</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <input
                       value={newDsa.title}
                       onChange={(e) => setNewDsa({ ...newDsa, title: e.target.value })}
                       placeholder="Problem title *"
-                      className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                      className="col-span-2 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                     />
                     <input
                       value={newDsa.topic}
                       onChange={(e) => setNewDsa({ ...newDsa, topic: e.target.value })}
                       placeholder="Topic *"
-                      className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                      className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                     />
                     <select
                       value={newDsa.difficulty}
                       onChange={(e) => setNewDsa({ ...newDsa, difficulty: e.target.value })}
-                      className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
+                      className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer"
                     >
                       {DIFFICULTY.map((d) => <option key={d}>{d}</option>)}
                     </select>
@@ -405,11 +405,11 @@ export default function PlacementDashboard() {
                       value={newDsa.link}
                       onChange={(e) => setNewDsa({ ...newDsa, link: e.target.value })}
                       placeholder="LeetCode / GFG link"
-                      className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                      className="col-span-2 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                     />
                     <button
                       onClick={handleAddDsa}
-                      className="col-span-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium cursor-pointer py-2"
+                      className="col-span-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer py-2"
                     >
                       + Add
                     </button>
@@ -417,41 +417,41 @@ export default function PlacementDashboard() {
                 </div>
               )}
 
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800 bg-gray-800/50">
-                      <th className="text-left text-gray-400 text-xs py-3 px-4">#</th>
+                    <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-surface-alt)]/50">
+                      <th className="text-left text-[var(--color-text-secondary)] text-xs py-3 px-4">#</th>
                       {DSA_SORT_OPTIONS.map((opt) => (
                         <th
                           key={opt.key}
                           onClick={() => toggleDsaSort(opt.key)}
-                          className="text-left text-gray-400 text-xs py-3 px-4 cursor-pointer select-none hover:text-white transition-colors"
+                          className="text-left text-[var(--color-text-secondary)] text-xs py-3 px-4 cursor-pointer select-none hover:text-[var(--color-text-primary)] transition-colors"
                         >
                           {opt.label} {dsaSortBy === opt.key && (dsaSortDir === "asc" ? "▲" : "▼")}
                         </th>
                       ))}
-                      {isOfficer && <th className="text-gray-400 text-xs py-3 px-4"></th>}
+                      {isOfficer && <th className="text-[var(--color-text-secondary)] text-xs py-3 px-4"></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {sortedDsaList.map((d, i) => (
                       <tr
                         key={d.id}
-                        className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors"
+                        className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg-hover)]/50 transition-colors"
                       >
-                        <td className="py-3 px-4 text-gray-500 text-xs">{i + 1}</td>
+                        <td className="py-3 px-4 text-[var(--color-text-muted)] text-xs">{i + 1}</td>
                         <td className="py-3 px-4">
                           <a
                             href={d.link || "#"}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors"
+                            className="text-[var(--color-accent-soft-text)] hover:opacity-80 text-xs font-medium transition-colors"
                           >
                             {d.title}
                           </a>
                         </td>
-                        <td className="py-3 px-4 text-gray-400 text-xs">{d.topic}</td>
+                        <td className="py-3 px-4 text-[var(--color-text-secondary)] text-xs">{d.topic}</td>
                         <td className="py-3 px-4">
                           <span
                             className={`text-xs px-2 py-0.5 rounded-lg font-medium
@@ -468,7 +468,7 @@ export default function PlacementDashboard() {
                           <td className="py-3 px-4 text-center">
                             <button
                               onClick={() => removeDsa(d.id)}
-                              className="text-gray-600 hover:text-red-400 cursor-pointer transition-colors"
+                              className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer transition-colors"
                             >
                               🗑️
                             </button>
@@ -478,7 +478,7 @@ export default function PlacementDashboard() {
                     ))}
                     {dsaList.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-gray-600 text-sm">
+                        <td colSpan={5} className="py-8 text-center text-[var(--color-text-muted)] text-sm">
                           No questions added yet.
                         </td>
                       </tr>
@@ -496,7 +496,7 @@ export default function PlacementDashboard() {
                 <div className="flex justify-end">
                   <button
                     onClick={() => setShowAptForm(!showAptForm)}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
+                    className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
                   >
                     {showAptForm ? "✕ Cancel" : "+ Add Question"}
                   </button>
@@ -504,13 +504,13 @@ export default function PlacementDashboard() {
               )}
 
               {showAptForm && isOfficer && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
-                  <h3 className="text-white font-semibold">➕ Add Aptitude Question</h3>
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">➕ Add Aptitude Question</h3>
                   <input
                     value={newQ.question}
                     onChange={(e) => setNewQ({ ...newQ, question: e.target.value })}
                     placeholder="Question *"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     {newQ.options.map((opt, idx) => (
@@ -520,7 +520,7 @@ export default function PlacementDashboard() {
                           name="correct"
                           checked={newQ.answer === idx}
                           onChange={() => setNewQ({ ...newQ, answer: idx })}
-                          className="cursor-pointer accent-amber-500"
+                          className="cursor-pointer accent-[var(--color-accent-solid)]"
                         />
                         <input
                           value={opt}
@@ -530,17 +530,17 @@ export default function PlacementDashboard() {
                             setNewQ({ ...newQ, options: opts });
                           }}
                           placeholder={`Option ${String.fromCharCode(65 + idx)}`}
-                          className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                          className="flex-1 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-xs focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                         />
                       </div>
                     ))}
                   </div>
-                  <p className="text-gray-500 text-xs">
+                  <p className="text-[var(--color-text-muted)] text-xs">
                     Select the radio button next to the correct answer.
                   </p>
                   <button
                     onClick={handleAddQuestion}
-                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium cursor-pointer"
+                    className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer"
                   >
                     + Add Question
                   </button>
@@ -548,15 +548,15 @@ export default function PlacementDashboard() {
               )}
 
               {submitted ? (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-8 text-center">
                   <p className="text-5xl mb-4">🎯</p>
-                  <h3 className="text-white text-2xl font-bold mb-2">Test Completed!</h3>
+                  <h3 className="text-[var(--color-text-primary)] text-2xl font-bold mb-2">Test Completed!</h3>
                   <p className="text-4xl font-bold text-amber-400 mb-4">
                     {score} / {aptitude.length}
                   </p>
                   <button
                     onClick={() => { setSubmitted(false); setAnswers({}); }}
-                    className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium cursor-pointer"
+                    className="px-6 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer"
                   >
                     Try Again
                   </button>
@@ -564,16 +564,16 @@ export default function PlacementDashboard() {
               ) : (
                 <>
                   {aptitude.map((q, i) => (
-                    <div key={q.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+                    <div key={q.id} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                       <div className="flex items-start justify-between gap-3 mb-4">
-                        <p className="text-white text-sm font-medium">
+                        <p className="text-[var(--color-text-primary)] text-sm font-medium">
                           <span className="text-amber-400 mr-2">Q{i + 1}.</span>
                           {q.question}
                         </p>
                         {isOfficer && (
                           <button
                             onClick={() => removeAptitude(q.id)}
-                            className="text-gray-600 hover:text-red-400 cursor-pointer flex-shrink-0"
+                            className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer flex-shrink-0"
                           >
                             🗑️
                           </button>
@@ -586,8 +586,8 @@ export default function PlacementDashboard() {
                             onClick={() => setAnswers({ ...answers, [q.id]: idx })}
                             className={`text-left px-4 py-2.5 rounded-xl text-xs font-medium transition-all cursor-pointer border
                               ${answers[q.id] === idx
-                                ? "bg-amber-600 border-amber-500 text-white"
-                                : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500"}`}
+                                ? "bg-[var(--color-accent-solid)] border-[var(--color-accent-solid)] text-white"
+                                : "bg-[var(--color-bg-surface-alt)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)]"}`}
                           >
                             {String.fromCharCode(65 + idx)}. {opt}
                           </button>
@@ -600,14 +600,14 @@ export default function PlacementDashboard() {
                     <button
                       onClick={() => setSubmitted(true)}
                       disabled={Object.keys(answers).length < aptitude.length}
-                      className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold cursor-pointer"
+                      className="w-full py-3 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold cursor-pointer"
                     >
                       Submit Test ({Object.keys(answers).length}/{aptitude.length} answered)
                     </button>
                   )}
 
                   {aptitude.length === 0 && (
-                    <div className="text-center py-12 text-gray-600">
+                    <div className="text-center py-12 text-[var(--color-text-muted)]">
                       <p className="text-4xl mb-2">📝</p>
                       <p className="text-sm">
                         No questions yet.{" "}
@@ -627,7 +627,7 @@ export default function PlacementDashboard() {
                 <div className="flex justify-end">
                   <button
                     onClick={() => setShowUploadForm(!showUploadForm)}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
+                    className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
                   >
                     {showUploadForm ? "✕ Cancel" : "📤 Upload Resource"}
                   </button>
@@ -635,39 +635,39 @@ export default function PlacementDashboard() {
               )}
 
               {showUploadForm && isOfficer && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-white font-semibold">📤 Upload Placement Resource</h3>
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">📤 Upload Placement Resource</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-gray-400 text-xs mb-1 block">Category</label>
+                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Category</label>
                       <select
                         value={uploadCategory}
                         onChange={(e) => setUploadCategory(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
+                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer"
                       >
                         {UPLOAD_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-gray-400 text-xs mb-1 block">Title *</label>
+                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Title *</label>
                       <input
                         value={uploadTitle}
                         onChange={(e) => setUploadTitle(e.target.value)}
                         placeholder="Resource title"
-                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                       />
                     </div>
                   </div>
 
                   {/* Optional status — Open / Closed / None */}
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">
-                      Status <span className="text-gray-600">(optional)</span>
+                    <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">
+                      Status <span className="text-[var(--color-text-muted)]">(optional)</span>
                     </label>
                     <select
                       value={uploadStatus}
                       onChange={(e) => setUploadStatus(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
+                      className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer"
                     >
                       <option value="">— None —</option>
                       <option value="Open">Open</option>
@@ -679,11 +679,11 @@ export default function PlacementDashboard() {
                     onClick={() => uploadRef.current?.click()}
                     className={`w-full border-2 border-dashed rounded-xl p-5 flex flex-col items-center gap-2 cursor-pointer transition-all
                       ${uploadFile
-                        ? "border-amber-500 bg-amber-500/10"
-                        : "border-gray-600 hover:border-gray-500"}`}
+                        ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]"
+                        : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"}`}
                   >
                     <span className="text-2xl">{uploadFile ? "📄" : "📁"}</span>
-                    <p className="text-gray-300 text-sm">
+                    <p className="text-[var(--color-text-secondary)] text-sm">
                       {uploadFile ? uploadFile.name : "Click to attach a file (optional)"}
                     </p>
                     <input
@@ -695,19 +695,19 @@ export default function PlacementDashboard() {
                   </div>
 
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Or paste a link</label>
+                    <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Or paste a link</label>
                     <input
                       value={uploadLink}
                       onChange={(e) => setUploadLink(e.target.value)}
                       placeholder="https://drive.google.com/..."
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+                      className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
                     />
                   </div>
 
                   <button
                     onClick={handleUpload}
                     disabled={!uploadTitle || uploading}
-                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer"
+                    className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer"
                   >
                     {uploading ? "⏳ Uploading..." : "Upload Resource"}
                   </button>
@@ -716,26 +716,26 @@ export default function PlacementDashboard() {
 
               {/* Grouped uploads */}
               {Object.keys(groupedUploads).length === 0 && (
-                <div className="text-center py-12 text-gray-600">
+                <div className="text-center py-12 text-[var(--color-text-muted)]">
                   <p className="text-4xl mb-2">📭</p>
                   <p className="text-sm">No resources uploaded yet.</p>
                 </div>
               )}
 
               {Object.entries(groupedUploads).map(([cat, items]) => (
-                <div key={cat} className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                  <h3 className="text-white font-semibold mb-3">📂 {cat}</h3>
+                <div key={cat} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold mb-3">📂 {cat}</h3>
                   <div className="space-y-2">
                     {items.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 border border-gray-700 flex-wrap gap-2"
+                        className="flex items-center justify-between bg-[var(--color-bg-surface-alt)] rounded-xl px-4 py-3 border border-[var(--color-border)] flex-wrap gap-2"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-xl">📄</span>
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className="text-white text-xs font-medium">{item.title}</p>
+                              <p className="text-[var(--color-text-primary)] text-xs font-medium">{item.title}</p>
                               {item.status && (
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium
                                   ${item.status === "Open"
@@ -745,7 +745,7 @@ export default function PlacementDashboard() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-gray-500 text-xs">
+                            <p className="text-[var(--color-text-muted)] text-xs">
                               {item.uploadedBy} · {item.date}
                             </p>
                           </div>
@@ -765,7 +765,7 @@ export default function PlacementDashboard() {
                               target="_blank"
                               rel="noreferrer"
                               download={item.fileName || undefined}
-                              className="px-3 py-1.5 bg-blue-600/20 text-blue-400 rounded-lg text-xs hover:bg-blue-600/30 transition-all"
+                              className="px-3 py-1.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs hover:opacity-80 transition-all"
                             >
                               {item.fileUrl ? "⬇️ Download" : "🔗 Open"}
                             </a>
@@ -773,7 +773,7 @@ export default function PlacementDashboard() {
                           {isOfficer && (
                             <button
                               onClick={() => removePlacementUpload(item.id)}
-                              className="text-gray-600 hover:text-red-400 cursor-pointer"
+                              className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer"
                             >
                               🗑️
                             </button>

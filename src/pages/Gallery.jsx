@@ -25,28 +25,28 @@ function ImageLightbox({ photo, onClose }) {
     >
       {/* Top bar */}
       <div
-        className="flex items-center justify-between px-4 py-3 bg-gray-900/80 border-b border-gray-700 flex-shrink-0"
+        className="flex items-center justify-between px-4 py-3 bg-[var(--color-bg-surface)]/80 border-b border-[var(--color-border)] flex-shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-lg">🖼️</span>
           <div className="min-w-0">
-            <p className="text-white text-sm font-medium truncate max-w-xs">{photo.caption}</p>
-            <p className="text-gray-400 text-xs">{photo.category} · {photo.uploadedBy} · {photo.date}</p>
+            <p className="text-[var(--color-text-primary)] text-sm font-medium truncate max-w-xs">{photo.caption}</p>
+            <p className="text-[var(--color-text-muted)] text-xs">{photo.category} · {photo.uploadedBy} · {photo.date}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <a
             href={photo.url}
             download={photo.caption}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium transition-all cursor-pointer"
             onClick={(e) => e.stopPropagation()}
           >
             ⬇️ Download
           </a>
           <button
             onClick={onClose}
-            className="px-3 py-2 bg-gray-700 hover:bg-red-600 text-white rounded-xl text-sm transition-all cursor-pointer"
+            className="px-3 py-2 bg-[var(--color-bg-surface-alt)] hover:bg-red-600 text-[var(--color-text-primary)] hover:text-white rounded-xl text-sm transition-all cursor-pointer"
           >
             ✕ Close
           </button>
@@ -153,16 +153,16 @@ export default function Gallery() {
   }, {});
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-[var(--color-bg-app)] overflow-hidden">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar onMenuClick={() => setMobileOpen(true)} title="Gallery & Resources" />
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
 
-          <div className="bg-gradient-to-r from-pink-600 to-rose-600 rounded-2xl p-5 text-white">
-            <p className="text-pink-100 text-sm mb-1">📸 Gallery &amp; Sem Resources</p>
+          <div className="bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] rounded-2xl p-5 text-white">
+            <p className="text-white/80 text-sm mb-1">📸 Gallery &amp; Sem Resources</p>
             <h2 className="text-2xl font-bold">Branch Gallery</h2>
-            <p className="text-pink-100 text-sm mt-1">Only academic/branch photos — no personal photos allowed</p>
+            <p className="text-white/80 text-sm mt-1">Only academic/branch photos — no personal photos allowed</p>
           </div>
 
           {/* Tabs */}
@@ -170,7 +170,9 @@ export default function Gallery() {
             {["Gallery", "Sem Resources"].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer
-                  ${activeTab === tab ? "bg-pink-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                  ${activeTab === tab
+                    ? "bg-[var(--color-accent-solid)] text-white"
+                    : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
                 {tab}
               </button>
             ))}
@@ -181,8 +183,8 @@ export default function Gallery() {
             <div className="space-y-5">
               {/* Policy notice */}
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
-                <p className="text-amber-300 text-xs font-semibold mb-1">📌 Upload Guidelines</p>
-                <ul className="text-amber-200 text-xs space-y-0.5 list-disc list-inside">
+                <p className="text-amber-400 text-xs font-semibold mb-1">📌 Upload Guidelines</p>
+                <ul className="text-amber-300 text-xs space-y-0.5 list-disc list-inside">
                   <li>Only branch/academic related photos allowed</li>
                   <li>No personal, offensive, or inappropriate photos</li>
                   <li>Photos should represent events, achievements, or campus activities</li>
@@ -191,29 +193,29 @@ export default function Gallery() {
               </div>
 
               <div className="flex items-center justify-between">
-                <p className="text-gray-400 text-sm">{gallery.length} photos uploaded</p>
+                <p className="text-[var(--color-text-secondary)] text-sm">{gallery.length} photos uploaded</p>
                 <button onClick={() => setShowPhotoForm(!showPhotoForm)}
-                  className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-sm font-medium cursor-pointer transition-all">
+                  className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all">
                   {showPhotoForm ? "✕ Cancel" : "📷 Upload Photo"}
                 </button>
               </div>
 
               {showPhotoForm && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-white font-semibold">📷 Upload Branch Photo</h3>
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">📷 Upload Branch Photo</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-gray-400 text-xs mb-1 block">Caption *</label>
+                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Caption *</label>
                       <input value={photoCaption}
                         onChange={(e) => setPhotoCaption(e.target.value)}
                         placeholder="e.g. Hackathon Winners 2026"
-                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-pink-500 placeholder-gray-600" />
+                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
                     </div>
                     <div>
-                      <label className="text-gray-400 text-xs mb-1 block">Category</label>
+                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Category</label>
                       <select value={photoCategory}
                         onChange={(e) => setPhotoCategory(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-pink-500 cursor-pointer">
+                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer">
                         {PHOTO_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
                       </select>
                     </div>
@@ -222,26 +224,26 @@ export default function Gallery() {
                   <div
                     onClick={() => photoRef.current?.click()}
                     className={`w-full border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all
-                      ${photoPreview ? "border-pink-500" : "border-gray-600 hover:border-gray-500"}`}>
+                      ${photoPreview ? "border-[var(--color-accent-solid)]" : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"}`}>
                     {photoPreview ? (
                       <img src={photoPreview} alt="preview" className="w-full h-48 object-cover" />
                     ) : (
                       <div className="p-8 flex flex-col items-center gap-2">
                         <span className="text-3xl">📷</span>
-                        <p className="text-gray-300 text-sm">Click to select photo</p>
-                        <p className="text-gray-600 text-xs">JPG, PNG supported</p>
+                        <p className="text-[var(--color-text-secondary)] text-sm">Click to select photo</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">JPG, PNG supported</p>
                       </div>
                     )}
                     <input ref={photoRef} type="file" accept="image/*"
                       onChange={handlePhotoChange} className="hidden" />
                   </div>
 
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-xs text-red-300">
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-xs text-red-400">
                     ⚠️ By uploading, you confirm this is a branch/academic photo.
                   </div>
 
                   <button onClick={handleAddPhoto}
-                    className="w-full py-2.5 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-sm font-semibold cursor-pointer transition-all">
+                    className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold cursor-pointer transition-all">
                     Upload Photo
                   </button>
                 </div>
@@ -249,14 +251,14 @@ export default function Gallery() {
 
               {/* Photo grid */}
               {gallery.length === 0 ? (
-                <div className="text-center py-12 text-gray-600">
+                <div className="text-center py-12 text-[var(--color-text-muted)]">
                   <p className="text-4xl mb-2">📷</p>
                   <p className="text-sm">No photos yet. Be the first to upload a branch photo!</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                   {gallery.map((photo) => (
-                    <div key={photo.id} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                    <div key={photo.id} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
 
                       {/* Photo thumbnail */}
                       {photo.url ? (
@@ -276,19 +278,19 @@ export default function Gallery() {
                           </div>
                         </div>
                       ) : (
-                        <div className="w-full h-40 bg-gray-800 flex items-center justify-center">
+                        <div className="w-full h-40 bg-[var(--color-bg-surface-alt)] flex items-center justify-center">
                           <span className="text-4xl">🖼️</span>
                         </div>
                       )}
 
                       {/* Card footer */}
                       <div className="p-3 space-y-2">
-                        <p className="text-white text-xs font-medium truncate">{photo.caption}</p>
+                        <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{photo.caption}</p>
                         <div className="flex items-center justify-between">
-                          <span className="text-xs px-2 py-0.5 bg-pink-500/20 text-pink-400 rounded-full">
+                          <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full">
                             {photo.category}
                           </span>
-                          <span className="text-gray-600 text-xs">{photo.uploadedBy}</span>
+                          <span className="text-[var(--color-text-muted)] text-xs">{photo.uploadedBy}</span>
                         </div>
 
                         {/* View button */}
@@ -296,7 +298,7 @@ export default function Gallery() {
                           {photo.url && (
                             <button
                               onClick={() => setLightboxPhoto(photo)}
-                              className="flex-1 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-lg text-xs font-medium transition-all cursor-pointer"
+                              className="flex-1 py-1.5 bg-[var(--color-accent-soft-bg)] hover:opacity-80 text-[var(--color-accent-soft-text)] rounded-lg text-xs font-medium transition-all cursor-pointer"
                             >
                               👁 View
                             </button>
@@ -321,14 +323,16 @@ export default function Gallery() {
           {/* ── SEM RESOURCES TAB ── */}
           {activeTab === "Sem Resources" && (
             <div className="space-y-5">
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
-                <p className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-3">Select Year &amp; Semester</p>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4">
+                <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">Select Year &amp; Semester</p>
                 <div className="flex gap-2 flex-wrap mb-3">
                   {YEARS.map((y) => (
                     <button key={y.label}
                       onClick={() => { setSelectedYear(y); setSelectedSem(y.sems[0]); }}
                       className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer
-                        ${selectedYear.label === y.label ? "bg-pink-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                        ${selectedYear.label === y.label
+                          ? "bg-[var(--color-accent-solid)] text-white"
+                          : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
                       {y.label}
                     </button>
                   ))}
@@ -337,7 +341,9 @@ export default function Gallery() {
                   {selectedYear.sems.map((sem) => (
                     <button key={sem} onClick={() => setSelectedSem(sem)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer
-                        ${selectedSem === sem ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                        ${selectedSem === sem
+                          ? "bg-[var(--color-accent-to)] text-white"
+                          : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
                       {sem}
                     </button>
                   ))}
@@ -347,77 +353,77 @@ export default function Gallery() {
               {canUpload && (
                 <div className="flex justify-end">
                   <button onClick={() => setShowResForm(!showResForm)}
-                    className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-sm font-medium cursor-pointer transition-all">
+                    className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all">
                     {showResForm ? "✕ Cancel" : `📤 Upload for ${selectedSem}`}
                   </button>
                 </div>
               )}
 
               {showResForm && canUpload && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-white font-semibold">📤 Upload Resource for {selectedSem}</h3>
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">📤 Upload Resource for {selectedSem}</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-gray-400 text-xs mb-1 block">Resource Type</label>
+                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Resource Type</label>
                       <select value={resType} onChange={(e) => setResType(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-pink-500 cursor-pointer">
+                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer">
                         {RESOURCE_TYPES.map((r) => <option key={r}>{r}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-gray-400 text-xs mb-1 block">Title *</label>
+                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Title *</label>
                       <input value={resTitle} onChange={(e) => setResTitle(e.target.value)}
                         placeholder="e.g. Sem 5 Timetable 2026"
-                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-pink-500 placeholder-gray-600" />
+                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
                     </div>
                   </div>
 
                   <div
                     onClick={() => resRef.current?.click()}
                     className={`w-full border-2 border-dashed rounded-xl p-5 flex flex-col items-center gap-2 cursor-pointer transition-all
-                      ${resFile ? "border-pink-500 bg-pink-500/10" : "border-gray-600 hover:border-gray-500"}`}>
+                      ${resFile ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]" : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"}`}>
                     <span className="text-2xl">{resFile ? "📄" : "📁"}</span>
-                    <p className="text-gray-300 text-sm">{resFile ? resFile.name : "Click to select file (PDF, image, etc.)"}</p>
+                    <p className="text-[var(--color-text-secondary)] text-sm">{resFile ? resFile.name : "Click to select file (PDF, image, etc.)"}</p>
                     <input ref={resRef} type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                       onChange={(e) => setResFile(e.target.files[0])} className="hidden" />
                   </div>
 
                   <button onClick={handleAddResource}
-                    className="w-full py-2.5 bg-pink-600 hover:bg-pink-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                    className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer">
                     Upload for {selectedSem}
                   </button>
                 </div>
               )}
 
               {semRes.length === 0 ? (
-                <div className="text-center py-12 text-gray-600">
+                <div className="text-center py-12 text-[var(--color-text-muted)]">
                   <p className="text-4xl mb-2">📂</p>
                   <p className="text-sm">No resources uploaded for {selectedSem} yet.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {Object.entries(groupedByType).map(([type, items]) => (
-                    <div key={type} className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                      <h3 className="text-white font-semibold mb-3">
+                    <div key={type} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                      <h3 className="text-[var(--color-text-primary)] font-semibold mb-3">
                         {type === "Timetable" ? "📅" :
                          type === "Calendar of Events" ? "📆" :
                          type === "Exam Schedule" ? "📋" : "📄"} {type}
                       </h3>
                       <div className="space-y-2">
                         {items.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 border border-gray-700">
+                          <div key={item.id} className="flex items-center justify-between bg-[var(--color-bg-surface-alt)] rounded-xl px-4 py-3 border border-[var(--color-border)]">
                             <div className="flex items-center gap-3">
                               <span className="text-lg">📄</span>
                               <div>
-                                <p className="text-white text-xs font-medium">{item.title}</p>
-                                <p className="text-gray-500 text-xs">{item.uploadedBy} · {item.date}</p>
+                                <p className="text-[var(--color-text-primary)] text-xs font-medium">{item.title}</p>
+                                <p className="text-[var(--color-text-muted)] text-xs">{item.uploadedBy} · {item.date}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => setPdfViewer({ fileUrl: item.fileUrl, fileName: item.title })}
-                                className="px-3 py-1.5 bg-blue-600/20 text-blue-400 rounded-lg text-xs hover:bg-blue-600/30 transition-all cursor-pointer">
+                                className="px-3 py-1.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs hover:opacity-80 transition-all cursor-pointer">
                                 👁 View
                               </button>
                               <a href={item.fileUrl} download={item.fileName}
@@ -426,7 +432,7 @@ export default function Gallery() {
                               </a>
                               {canUpload && (
                                 <button onClick={() => removeSemResource(selectedSem, item.id)}
-                                  className="text-gray-600 hover:text-red-400 cursor-pointer transition-colors">🗑️</button>
+                                  className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer transition-colors">🗑️</button>
                               )}
                             </div>
                           </div>

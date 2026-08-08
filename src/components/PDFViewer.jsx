@@ -79,16 +79,16 @@ export default function PDFViewer({ fileUrl, fileName, files, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex flex-col">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-700 flex-shrink-0 gap-3 flex-wrap">
+      <div className="flex items-center justify-between px-4 py-3 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] flex-shrink-0 gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-lg flex-shrink-0">{isImage ? "🖼️" : "📄"}</span>
-          <p className="text-white text-sm font-medium truncate max-w-xs">{currentName}</p>
+          <p className="text-[var(--color-text-primary)] text-sm font-medium truncate max-w-xs">{currentName}</p>
           {fileList.length > 1 && (
-            <span className="text-gray-500 text-xs flex-shrink-0">
+            <span className="text-[var(--color-text-muted)] text-xs flex-shrink-0">
               {index + 1} / {fileList.length}
             </span>
           )}
-          {isPdf && <span className="text-gray-500 text-xs flex-shrink-0">· page {page}</span>}
+          {isPdf && <span className="text-[var(--color-text-muted)] text-xs flex-shrink-0">· page {page}</span>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {fileList.length > 1 && (
@@ -96,7 +96,7 @@ export default function PDFViewer({ fileUrl, fileName, files, onClose }) {
               <button
                 onClick={() => goToFile(index - 1)}
                 disabled={index === 0}
-                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl text-sm transition-all cursor-pointer"
+                className="px-3 py-2 bg-[var(--color-bg-surface-alt)] hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed text-[var(--color-text-primary)] rounded-xl text-sm transition-all cursor-pointer"
                 title="Previous file (←)"
               >
                 ←
@@ -104,7 +104,7 @@ export default function PDFViewer({ fileUrl, fileName, files, onClose }) {
               <button
                 onClick={() => goToFile(index + 1)}
                 disabled={index === fileList.length - 1}
-                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl text-sm transition-all cursor-pointer"
+                className="px-3 py-2 bg-[var(--color-bg-surface-alt)] hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed text-[var(--color-text-primary)] rounded-xl text-sm transition-all cursor-pointer"
                 title="Next file (→)"
               >
                 →
@@ -113,19 +113,19 @@ export default function PDFViewer({ fileUrl, fileName, files, onClose }) {
           )}
           <button
             onClick={handleDownload}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium transition-all cursor-pointer"
           >
             ⬇️ Download
           </button>
           <button
             onClick={() => window.open(currentUrl, "_blank")}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-sm font-medium transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm font-medium transition-all cursor-pointer"
           >
             ↗ Open in Tab
           </button>
           <button
             onClick={onClose}
-            className="px-3 py-2 bg-gray-700 hover:bg-red-600 text-white rounded-xl text-sm transition-all cursor-pointer"
+            className="px-3 py-2 bg-[var(--color-bg-surface-alt)] hover:bg-red-600 text-[var(--color-text-primary)] hover:text-white rounded-xl text-sm transition-all cursor-pointer"
           >
             ✕ Close
           </button>
@@ -133,12 +133,12 @@ export default function PDFViewer({ fileUrl, fileName, files, onClose }) {
       </div>
 
       {/* Viewer */}
-      <div className="flex-1 relative overflow-auto bg-gray-950">
+      <div className="flex-1 relative overflow-auto bg-[var(--color-bg-app)]">
         {loading && !error && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
-              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-gray-400 text-sm">Loading document...</p>
+              <div className="w-12 h-12 border-4 border-[var(--color-accent-solid)] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-[var(--color-text-secondary)] text-sm">Loading document...</p>
             </div>
           </div>
         )}
@@ -171,11 +171,11 @@ export default function PDFViewer({ fileUrl, fileName, files, onClose }) {
           <div className="flex items-center justify-center min-h-full">
             <div className="text-center space-y-4 p-8">
               <p className="text-5xl">📎</p>
-              <p className="text-white font-semibold">{currentName}</p>
-              <p className="text-gray-400 text-sm">This file type cannot be previewed directly.</p>
+              <p className="text-[var(--color-text-primary)] font-semibold">{currentName}</p>
+              <p className="text-[var(--color-text-secondary)] text-sm">This file type cannot be previewed directly.</p>
               <button
                 onClick={handleDownload}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                className="px-6 py-3 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
               >
                 ⬇️ Download to View
               </button>
@@ -187,20 +187,20 @@ export default function PDFViewer({ fileUrl, fileName, files, onClose }) {
           <div className="flex items-center justify-center min-h-full">
             <div className="text-center space-y-4 p-8">
               <p className="text-5xl">⚠️</p>
-              <p className="text-white font-semibold">Couldn't load preview</p>
-              <p className="text-gray-400 text-sm">
+              <p className="text-[var(--color-text-primary)] font-semibold">Couldn't load preview</p>
+              <p className="text-[var(--color-text-secondary)] text-sm">
                 The file may have expired or can't be displayed in the browser.
               </p>
               <div className="flex gap-3 justify-center">
                 <button
                   onClick={handleDownload}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                  className="px-6 py-3 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
                 >
                   ⬇️ Download File
                 </button>
                 <button
                   onClick={() => window.open(currentUrl, "_blank")}
-                  className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                  className="px-6 py-3 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm font-semibold transition-all cursor-pointer"
                 >
                   ↗ Open in Tab
                 </button>
@@ -211,7 +211,7 @@ export default function PDFViewer({ fileUrl, fileName, files, onClose }) {
       </div>
 
       {/* Keyboard hint */}
-      <div className="px-4 py-1.5 bg-gray-900 border-t border-gray-800 text-center text-gray-600 text-xs flex-shrink-0">
+      <div className="px-4 py-1.5 bg-[var(--color-bg-surface)] border-t border-[var(--color-border)] text-center text-[var(--color-text-muted)] text-xs flex-shrink-0">
         ↑↓ change page · ←→ switch file · Esc close
       </div>
     </div>

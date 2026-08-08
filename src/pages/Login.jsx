@@ -39,12 +39,12 @@ function toE164(val) {
 function Field({ label, type = "text", value, onChange, placeholder, onKeyDown, required, disabled }) {
   return (
     <div>
-      <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+      <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input type={type} value={value} onChange={onChange} placeholder={placeholder}
         onKeyDown={onKeyDown} disabled={disabled}
-        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-sm disabled:opacity-60" />
+        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 text-sm disabled:opacity-60" />
     </div>
   );
 }
@@ -103,7 +103,7 @@ function PhoneVerifyBlock({ phone, verified, onVerified }) {
         <div className="flex gap-2">
           <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)}
             placeholder="6-digit OTP" maxLength={6}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-center tracking-widest text-sm focus:outline-none focus:border-blue-500" />
+            className="flex-1 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-center tracking-widest text-sm focus:outline-none focus:border-blue-500" />
           <button type="button" onClick={handleVerify} disabled={loading || !otp}
             className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white rounded-xl text-xs font-medium cursor-pointer transition-all">
             {loading ? "..." : "Verify"}
@@ -202,8 +202,8 @@ function StudentRegisterForm({ onBack, onSuccess }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-white font-semibold">📋 Student Registration</h2>
-        <button onClick={onBack} className="text-gray-400 hover:text-white text-sm cursor-pointer">← Back</button>
+        <h2 className="text-[var(--color-text-primary)] font-semibold">📋 Student Registration</h2>
+        <button onClick={onBack} className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm cursor-pointer">← Back</button>
       </div>
 
       {success && <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm">{success}</div>}
@@ -218,7 +218,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
         <Field label="Email" type="email" value={form.email} onChange={set("email")} placeholder="name@gmail.com" required />
         <Field label="Phone" type="tel" value={form.phone} onChange={set("phone")} placeholder="+91 9876543210" required disabled={phoneVerified} />
       </div>
-      <p className="text-gray-600 text-xs -mt-2">* Both email and phone are required. Phone must be verified via OTP.</p>
+      <p className="text-[var(--color-text-muted)] text-xs -mt-2">* Both email and phone are required. Phone must be verified via OTP.</p>
 
       {/* Phone OTP verification */}
       <PhoneVerifyBlock phone={form.phone} verified={phoneVerified} onVerified={handlePhoneVerified} />
@@ -226,11 +226,11 @@ function StudentRegisterForm({ onBack, onSuccess }) {
       <div className="grid grid-cols-2 gap-3">
         <Field label="Branch" value={form.branch} onChange={set("branch")} placeholder="CSEAIML" required />
         <div>
-          <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+          <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
             Admission Year <span className="text-red-400">*</span>
           </label>
           <select value={form.startYear} onChange={set("startYear")}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none text-sm cursor-pointer">
+            className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none text-sm cursor-pointer">
             {[0,1,2,3,4].map((o) => { const y = String(CURRENT_YEAR-o); return <option key={y} value={y}>{y}</option>; })}
           </select>
         </div>
@@ -238,27 +238,27 @@ function StudentRegisterForm({ onBack, onSuccess }) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+          <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
             Current Year <span className="text-red-400">*</span>
           </label>
           <select value={form.year} onChange={set("year")}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none text-sm cursor-pointer">
+            className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none text-sm cursor-pointer">
             {YEAR_OPTIONS.map((y) => <option key={y}>{y}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+          <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
             Semester <span className="text-red-400">*</span>
           </label>
           <select value={form.sem} onChange={set("sem")}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none text-sm cursor-pointer">
+            className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none text-sm cursor-pointer">
             {(SEM_MAP[form.year] || []).map((s) => <option key={s}>{s}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="bg-gray-800/50 rounded-xl p-2.5 text-xs text-gray-400 border border-gray-700">
-        📌 USN <span className="text-white font-medium">{form.usn || "—"}</span> · Sign in with <span className="text-white font-medium">{form.email || "your email"}</span> · Batch: <span className="text-blue-400">{form.startYear}–{endYear}</span>
+      <div className="bg-[var(--color-bg-surface-alt)]/50 rounded-xl p-2.5 text-xs text-[var(--color-text-secondary)] border border-[var(--color-border)]">
+        📌 USN <span className="text-[var(--color-text-primary)] font-medium">{form.usn || "—"}</span> · Sign in with <span className="text-[var(--color-text-primary)] font-medium">{form.email || "your email"}</span> · Batch: <span className="text-blue-400">{form.startYear}–{endYear}</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -345,8 +345,8 @@ function StaffRegisterForm({ role, onBack, onSuccess }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-white font-semibold">{config.icon} {config.label} Registration</h2>
-        <button onClick={onBack} className="text-gray-400 hover:text-white text-sm cursor-pointer">← Back</button>
+        <h2 className="text-[var(--color-text-primary)] font-semibold">{config.icon} {config.label} Registration</h2>
+        <button onClick={onBack} className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm cursor-pointer">← Back</button>
       </div>
 
       {success && <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm">{success}</div>}
@@ -358,7 +358,7 @@ function StaffRegisterForm({ role, onBack, onSuccess }) {
         <Field label="Email" type="email" value={form.email} onChange={set("email")} placeholder="name@gmail.com" required />
         <Field label="Phone" type="tel" value={form.phone} onChange={set("phone")} placeholder="+91 9876543210" required disabled={phoneVerified} />
       </div>
-      <p className="text-gray-600 text-xs -mt-2">* Both email and phone are required. Phone must be verified via OTP.</p>
+      <p className="text-[var(--color-text-muted)] text-xs -mt-2">* Both email and phone are required. Phone must be verified via OTP.</p>
 
       {/* Phone OTP verification */}
       <PhoneVerifyBlock phone={form.phone} verified={phoneVerified} onVerified={handlePhoneVerified} />
@@ -409,11 +409,11 @@ function ForgotPasswordBlock({ onBack }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-white font-semibold text-sm">🔑 Reset Password</h2>
-        <button onClick={onBack} className="text-gray-400 hover:text-white text-xs cursor-pointer">← Back to Sign In</button>
+        <h2 className="text-[var(--color-text-primary)] font-semibold text-sm">🔑 Reset Password</h2>
+        <button onClick={onBack} className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs cursor-pointer">← Back to Sign In</button>
       </div>
 
-      <p className="text-gray-500 text-xs">
+      <p className="text-[var(--color-text-muted)] text-xs">
         Enter the email address linked to your account. We'll send you a link to reset your password.
       </p>
 
@@ -502,13 +502,13 @@ function SignInForm({ role, prefilledId, onRegister }) {
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+        <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
           Email / Phone / User ID
         </label>
         <input type="text" value={identifier}
           onChange={(e) => { setIdentifier(e.target.value); setOtpSent(false); setOtp(""); setError(""); }}
           placeholder="Email, +91 phone, or ID (e.g. STU001)"
-          className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-sm" />
+          className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 text-sm" />
         {phoneDetected && !otpSent && <p className="text-blue-400 text-xs mt-1">📱 Phone detected — click Send OTP</p>}
         {emailDetected && <p className="text-violet-400 text-xs mt-1">📧 Email detected</p>}
       </div>
@@ -516,11 +516,11 @@ function SignInForm({ role, prefilledId, onRegister }) {
       {/* Password — for non-phone */}
       {!phoneDetected && (
         <div>
-          <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">Password</label>
+          <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             placeholder="Enter your password"
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-sm" />
+            className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 text-sm" />
           <button onClick={() => setShowForgot(true)}
             className="text-blue-400 hover:text-blue-300 text-xs mt-1.5 cursor-pointer transition-colors">
             Forgot password?
@@ -538,11 +538,11 @@ function SignInForm({ role, prefilledId, onRegister }) {
 
       {phoneDetected && otpSent && (
         <div>
-          <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">Enter OTP</label>
+          <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">Enter OTP</label>
           <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             placeholder="6-digit OTP" maxLength={6}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-center tracking-widest text-lg placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+            className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-[var(--color-text-primary)] text-center tracking-widest text-lg placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500" />
           <button onClick={handleSendOTP} className="text-blue-400 text-xs mt-1 cursor-pointer hover:text-blue-300">Resend OTP</button>
         </div>
       )}
@@ -560,8 +560,8 @@ function SignInForm({ role, prefilledId, onRegister }) {
       )}
 
       {/* Register link */}
-      <div className="pt-2 border-t border-gray-800 text-center">
-        <p className="text-gray-600 text-xs mb-1">
+      <div className="pt-2 border-t border-[var(--color-border)] text-center">
+        <p className="text-[var(--color-text-muted)] text-xs mb-1">
           {role === "student" ? "New student?" : `New ${ROLE_CONFIG[role].label}?`}
         </p>
         <button onClick={onRegister}
@@ -585,7 +585,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[var(--color-bg-app)] flex items-center justify-center p-4 relative overflow-hidden">
       <div id="recaptcha-container" />
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -596,26 +596,26 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 mb-4 shadow-lg shadow-blue-500/30">
             <span className="text-2xl">🏫</span>
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">CSEAIML LMS</h1>
-          <p className="text-gray-400 mt-1 text-sm">Learning Management System</p>
+          <h1 className="text-3xl font-bold text-[var(--color-text-primary)] tracking-tight">CSEAIML LMS</h1>
+          <p className="text-[var(--color-text-secondary)] mt-1 text-sm">Learning Management System</p>
           <div className="mt-4">
             <InstallAppButton />
           </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl">
+        <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-2xl">
 
           {/* Role selection */}
           {!selectedRole ? (
             <>
-              <h2 className="text-white font-semibold text-lg mb-1">Who are you?</h2>
-              <p className="text-gray-500 text-sm mb-5">Select your role to continue</p>
+              <h2 className="text-[var(--color-text-primary)] font-semibold text-lg mb-1">Who are you?</h2>
+              <p className="text-[var(--color-text-muted)] text-sm mb-5">Select your role to continue</p>
               <div className="grid grid-cols-2 gap-3">
                 {Object.entries(ROLE_CONFIG).map(([role, config]) => (
                   <button key={role} onClick={() => { setSelectedRole(role); setMode("signin"); }}
-                    className="flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-700 hover:border-gray-500 bg-gray-800/50 hover:bg-gray-800 transition-all duration-200 group cursor-pointer">
+                    className="flex flex-col items-center gap-2 p-4 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-text-muted)] bg-[var(--color-bg-surface-alt)]/50 hover:bg-[var(--color-bg-surface-alt)] transition-all duration-200 group cursor-pointer">
                     <span className="text-3xl group-hover:scale-110 transition-transform">{config.icon}</span>
-                    <span className="text-white text-sm font-medium">{config.label}</span>
+                    <span className="text-[var(--color-text-primary)] text-sm font-medium">{config.label}</span>
                   </button>
                 ))}
               </div>
@@ -624,7 +624,7 @@ export default function Login() {
             <>
               {/* Back to role select */}
               <button onClick={() => { setSelectedRole(null); setMode("signin"); }}
-                className="flex items-center gap-1 text-gray-400 hover:text-white text-sm mb-4 cursor-pointer transition-colors">
+                className="flex items-center gap-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm mb-4 cursor-pointer transition-colors">
                 ← Back
               </button>
 
@@ -656,7 +656,7 @@ export default function Login() {
             </>
           )}
         </div>
-        <p className="text-center text-gray-600 text-xs mt-4">CSEAIML Department · Academic Portal</p>
+        <p className="text-center text-[var(--color-text-muted)] text-xs mt-4">CSEAIML Department · Academic Portal</p>
       </div>
     </div>
   );

@@ -196,7 +196,7 @@ export default function FacultyDashboard() {
   const semNotes = notes.filter((n) => n.sem === selectedSem);
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-[var(--color-bg-app)] overflow-hidden">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -205,15 +205,15 @@ export default function FacultyDashboard() {
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
 
           {/* Welcome */}
-          <div className="bg-gradient-to-r from-violet-600 to-purple-600 rounded-2xl p-5 text-white">
-            <p className="text-violet-100 text-sm mb-1">Faculty Portal 👨‍🏫</p>
+          <div className="bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] rounded-2xl p-5 text-white">
+            <p className="text-white/80 text-sm mb-1">Faculty Portal 👨‍🏫</p>
             <h2 className="text-2xl font-bold">{user?.name}</h2>
-            <p className="text-violet-100 text-sm mt-1">{user?.name}</p>
+            <p className="text-white/80 text-sm mt-1">{user?.name}</p>
           </div>
 
           {/* Year / Sem selector */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
-            <p className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-3">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4">
+            <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
               Select Year &amp; Semester
             </p>
             <div className="flex gap-2 flex-wrap mb-3">
@@ -223,8 +223,8 @@ export default function FacultyDashboard() {
                   onClick={() => { setSelectedYear(y); setSelectedSem(y.sems[0]); }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer
                     ${selectedYear.label === y.label
-                      ? "bg-violet-600 text-white"
-                      : "bg-gray-800 text-gray-400 hover:text-white"}`}
+                      ? "bg-[var(--color-accent-solid)] text-white"
+                      : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
                 >
                   {y.label}
                 </button>
@@ -237,8 +237,8 @@ export default function FacultyDashboard() {
                   onClick={() => setSelectedSem(sem)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer
                     ${selectedSem === sem
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-800 text-gray-400 hover:text-white"}`}
+                      ? "bg-[var(--color-accent-to)] text-white"
+                      : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
                 >
                   {sem}
                 </button>
@@ -254,8 +254,8 @@ export default function FacultyDashboard() {
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer
                   ${activeTab === tab
-                    ? "bg-white text-gray-900"
-                    : "bg-gray-800 text-gray-400 hover:text-white"}`}
+                    ? "bg-[var(--color-accent-solid)] text-white"
+                    : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
               >
                 {tab}
               </button>
@@ -264,8 +264,8 @@ export default function FacultyDashboard() {
 
           {/* ── SUBJECTS ── */}
           {activeTab === "Subjects" && (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-              <h3 className="text-white font-semibold">📚 Subjects — {selectedSem}</h3>
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+              <h3 className="text-[var(--color-text-primary)] font-semibold">📚 Subjects — {selectedSem}</h3>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -273,11 +273,11 @@ export default function FacultyDashboard() {
                   onChange={(e) => setNewSubject(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddSubject()}
                   placeholder="Type new subject and press Enter..."
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 text-sm"
+                  className="flex-1 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm"
                 />
                 <button
                   onClick={handleAddSubject}
-                  className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-medium transition-all cursor-pointer"
+                  className="px-4 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium transition-all cursor-pointer"
                 >
                   + Add
                 </button>
@@ -286,22 +286,22 @@ export default function FacultyDashboard() {
                 {(subjects[selectedSem] || []).map((subject) => (
                   <div
                     key={subject}
-                    className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-700"
+                    className="flex items-center justify-between bg-[var(--color-bg-surface-alt)] rounded-xl px-3 py-2.5 border border-[var(--color-border)]"
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm">📖</span>
-                      <span className="text-white text-xs font-medium">{subject}</span>
+                      <span className="text-[var(--color-text-primary)] text-xs font-medium">{subject}</span>
                     </div>
                     <button
                       onClick={() => removeSubject(selectedSem, subject)}
-                      className="text-gray-600 hover:text-red-400 transition-colors text-sm cursor-pointer ml-2"
+                      className="text-[var(--color-text-muted)] hover:text-red-400 transition-colors text-sm cursor-pointer ml-2"
                     >
                       ✕
                     </button>
                   </div>
                 ))}
                 {(subjects[selectedSem] || []).length === 0 && (
-                  <p className="text-gray-600 text-sm col-span-3">
+                  <p className="text-[var(--color-text-muted)] text-sm col-span-3">
                     No subjects yet. Add one above.
                   </p>
                 )}
@@ -311,19 +311,19 @@ export default function FacultyDashboard() {
 
           {/* ── UPLOAD NOTES ── */}
           {activeTab === "Upload Notes" && (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-5">
-              <h3 className="text-white font-semibold">📤 Upload Notes / PYQ — {selectedSem}</h3>
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-5">
+              <h3 className="text-[var(--color-text-primary)] font-semibold">📤 Upload Notes / PYQ — {selectedSem}</h3>
 
-              <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-5 space-y-4">
+              <div className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+                    <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
                       Subject
                     </label>
                     <select
                       value={noteSubject}
                       onChange={(e) => setNoteSubject(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-violet-500 text-sm cursor-pointer"
+                      className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm cursor-pointer"
                     >
                       <option value="">— Select Subject —</option>
                       {(subjects[selectedSem] || []).map((s) => (
@@ -337,13 +337,13 @@ export default function FacultyDashboard() {
                     )}
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+                    <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
                       Type
                     </label>
                     <select
                       value={noteType}
                       onChange={(e) => setNoteType(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-violet-500 text-sm cursor-pointer"
+                      className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm cursor-pointer"
                     >
                       <option value="Notes">📝 Notes</option>
                       <option value="PYQ">📋 Previous Year Questions</option>
@@ -355,28 +355,28 @@ export default function FacultyDashboard() {
 
                 {/* File picker */}
                 <div>
-                  <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+                  <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
                     File (PDF / DOCX / PPTX / Image)
                   </label>
                   <div
                     onClick={() => fileInputRef.current?.click()}
                     className={`w-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all
                       ${selectedFile
-                        ? "border-violet-500 bg-violet-500/10"
-                        : "border-gray-600 hover:border-gray-500 bg-gray-800/40"}`}
+                        ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]"
+                        : "border-[var(--color-border)] hover:border-[var(--color-text-muted)] bg-[var(--color-bg-surface)]/40"}`}
                   >
                     <span className="text-3xl">{selectedFile ? "📄" : "📁"}</span>
                     {selectedFile ? (
                       <>
-                        <p className="text-violet-300 text-sm font-medium">{selectedFile.name}</p>
-                        <p className="text-gray-500 text-xs">
+                        <p className="text-[var(--color-accent-soft-text)] text-sm font-medium">{selectedFile.name}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">
                           {(selectedFile.size / 1024).toFixed(1)} KB · Click to change
                         </p>
                       </>
                     ) : (
                       <>
-                        <p className="text-gray-300 text-sm font-medium">Click to browse file</p>
-                        <p className="text-gray-500 text-xs">PDF, DOCX, PPTX, PNG, JPG supported</p>
+                        <p className="text-[var(--color-text-secondary)] text-sm font-medium">Click to browse file</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">PDF, DOCX, PPTX, PNG, JPG supported</p>
                       </>
                     )}
                     <input
@@ -392,7 +392,7 @@ export default function FacultyDashboard() {
                 <button
                   onClick={handleUploadNote}
                   disabled={!noteSubject || !selectedFile || uploading}
-                  className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                  className="w-full py-3 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
                 >
                   {uploading ? "⏳ Uploading to Cloudinary..." : "📤 Upload — Students can View & Download"}
                 </button>
@@ -406,12 +406,12 @@ export default function FacultyDashboard() {
 
               {/* Uploaded files list */}
               <div>
-                <p className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-3">
+                <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
                   Uploaded — {selectedSem} ({semNotes.length})
                 </p>
                 <div className="space-y-2">
                   {semNotes.length === 0 && (
-                    <div className="text-center py-8 text-gray-600">
+                    <div className="text-center py-8 text-[var(--color-text-muted)]">
                       <p className="text-3xl mb-2">📭</p>
                       <p className="text-sm">No files uploaded yet for {selectedSem}</p>
                     </div>
@@ -419,37 +419,37 @@ export default function FacultyDashboard() {
                   {semNotes.map((note) => (
                     <div
                       key={note.id}
-                      className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden"
+                      className="bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] overflow-hidden"
                     >
                       <div className="flex items-center gap-3 px-4 py-3">
                         <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
                           <span className="text-lg">📕</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-white text-xs font-medium truncate">{note.file}</p>
-                          <p className="text-gray-500 text-xs">
-                            {note.subject} · <span className="text-blue-400">{note.type}</span> · {note.uploadedBy}
+                          <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs">
+                            {note.subject} · <span className="text-[var(--color-accent-soft-text)]">{note.type}</span> · {note.uploadedBy}
                             {note.size && ` · ${note.size}`}
                           </p>
                         </div>
-                        <span className="text-gray-600 text-xs">{note.date}</span>
+                        <span className="text-[var(--color-text-muted)] text-xs">{note.date}</span>
                         <button
                           onClick={() => removeNote(note.id)}
-                          className="text-gray-600 hover:text-red-400 transition-colors cursor-pointer text-base ml-2"
+                          className="text-[var(--color-text-muted)] hover:text-red-400 transition-colors cursor-pointer text-base ml-2"
                         >
                           🗑️
                         </button>
                       </div>
                       {note.fileUrl && (
-                        <div className="flex border-t border-gray-700">
+                        <div className="flex border-t border-[var(--color-border)]">
                           <button
                             type="button"
                             onClick={() => setPdfViewer({ fileUrl: note.fileUrl, fileName: note.file })}
-                            className="flex-1 py-2 text-xs font-medium text-blue-400 hover:bg-blue-500/10 transition-all cursor-pointer flex items-center justify-center gap-1"
+                            className="flex-1 py-2 text-xs font-medium text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)] transition-all cursor-pointer flex items-center justify-center gap-1"
                           >
                             👁 Preview
                           </button>
-                          <div className="w-px bg-gray-700" />
+                          <div className="w-px bg-[var(--color-border)]" />
                           <a
                             href={note.fileUrl}
                             target="_blank"
@@ -470,21 +470,21 @@ export default function FacultyDashboard() {
 
           {/* ── ASSIGNMENTS ── */}
           {activeTab === "Assignments" && (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-              <h3 className="text-white font-semibold">📝 Assignment Reminders — {selectedSem}</h3>
-              <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-4 space-y-3">
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+              <h3 className="text-[var(--color-text-primary)] font-semibold">📝 Assignment Reminders — {selectedSem}</h3>
+              <div className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-2xl p-4 space-y-3">
                 <input
                   type="text"
                   value={assignTitle}
                   onChange={(e) => setAssignTitle(e.target.value)}
                   placeholder="Assignment title..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 text-sm"
+                  className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm"
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <select
                     value={assignSubject}
                     onChange={(e) => setAssignSubject(e.target.value)}
-                    className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-violet-500 text-sm cursor-pointer"
+                    className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm cursor-pointer"
                   >
                     <option value="">Select Subject</option>
                     {(subjects[selectedSem] || []).map((s) => (
@@ -495,7 +495,7 @@ export default function FacultyDashboard() {
                     type="date"
                     value={assignDue}
                     onChange={(e) => setAssignDue(e.target.value)}
-                    className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-violet-500 text-sm"
+                    className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm"
                   />
                 </div>
 
@@ -505,10 +505,10 @@ export default function FacultyDashboard() {
                   className={`w-full border border-dashed rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all
                     ${assignFile
                       ? "border-amber-500 bg-amber-500/10"
-                      : "border-gray-600 hover:border-gray-500"}`}
+                      : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"}`}
                 >
                   <span className="text-xl">{assignFile ? "📄" : "📎"}</span>
-                  <p className="text-gray-400 text-xs flex-1">
+                  <p className="text-[var(--color-text-secondary)] text-xs flex-1">
                     {assignFile ? assignFile.name : "Attach assignment PDF (optional)"}
                   </p>
                   {assignFile && (
@@ -518,7 +518,7 @@ export default function FacultyDashboard() {
                         setAssignFile(null);
                         if (assignFileRef.current) assignFileRef.current.value = "";
                       }}
-                      className="text-gray-500 hover:text-red-400 text-xs cursor-pointer"
+                      className="text-[var(--color-text-muted)] hover:text-red-400 text-xs cursor-pointer"
                     >
                       ✕
                     </button>
@@ -543,39 +543,39 @@ export default function FacultyDashboard() {
 
               <div className="space-y-2">
                 {assignments.filter((a) => a.sem === selectedSem).length === 0 && (
-                  <p className="text-gray-600 text-sm">No assignments added for {selectedSem}.</p>
+                  <p className="text-[var(--color-text-muted)] text-sm">No assignments added for {selectedSem}.</p>
                 )}
                 {assignments
                   .filter((a) => a.sem === selectedSem)
                   .map((a) => (
                     <div
                       key={a.id}
-                      className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden border-l-4 border-l-amber-500"
+                      className="bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] overflow-hidden border-l-4 border-l-amber-500"
                     >
                       <div className="flex items-center justify-between px-4 py-3">
                         <div>
-                          <p className="text-white text-xs font-medium">{a.title}</p>
-                          <p className="text-gray-500 text-xs mt-0.5">
+                          <p className="text-[var(--color-text-primary)] text-xs font-medium">{a.title}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs mt-0.5">
                             {a.subject} · Due: {a.due}
                           </p>
                         </div>
                         <button
                           onClick={() => removeAssignment(a.id)}
-                          className="text-gray-600 hover:text-red-400 transition-colors cursor-pointer text-base ml-4"
+                          className="text-[var(--color-text-muted)] hover:text-red-400 transition-colors cursor-pointer text-base ml-4"
                         >
                           🗑️
                         </button>
                       </div>
                       {a.fileUrl && (
-                        <div className="flex border-t border-gray-700">
+                        <div className="flex border-t border-[var(--color-border)]">
                           <button
                             type="button"
                             onClick={() => setPdfViewer({ fileUrl: a.fileUrl, fileName: a.title })}
-                            className="flex-1 py-2 text-xs font-medium text-blue-400 hover:bg-blue-500/10 transition-all cursor-pointer flex items-center justify-center gap-1"
+                            className="flex-1 py-2 text-xs font-medium text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)] transition-all cursor-pointer flex items-center justify-center gap-1"
                           >
                             👁 Preview PDF
                           </button>
-                          <div className="w-px bg-gray-700" />
+                          <div className="w-px bg-[var(--color-border)]" />
                           <a
                             href={a.fileUrl}
                             target="_blank"
@@ -595,21 +595,21 @@ export default function FacultyDashboard() {
 
           {/* ── ATTENDANCE ── */}
           {activeTab === "Attendance" && (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
-                <h3 className="text-white font-semibold">📅 Attendance — {selectedSem}</h3>
+                <h3 className="text-[var(--color-text-primary)] font-semibold">📅 Attendance — {selectedSem}</h3>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500 text-xs font-medium">Sort by:</span>
+                  <span className="text-[var(--color-text-muted)] text-xs font-medium">Sort by:</span>
                   <button
                     onClick={() => toggleSort("name")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all flex items-center gap-1
-                      ${sortBy === "name" ? "bg-violet-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                      ${sortBy === "name" ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
                     Name {sortBy === "name" && (sortDir === "asc" ? "▲" : "▼")}
                   </button>
                   <button
                     onClick={() => toggleSort("usn")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all flex items-center gap-1
-                      ${sortBy === "usn" ? "bg-violet-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                      ${sortBy === "usn" ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
                     USN {sortBy === "usn" && (sortDir === "asc" ? "▲" : "▼")}
                   </button>
                 </div>
@@ -617,15 +617,15 @@ export default function FacultyDashboard() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800">
+                    <tr className="border-b border-[var(--color-border)]">
                       <th
                         onClick={() => toggleSort("name")}
-                        className="text-left text-gray-400 text-xs py-2 pr-4 min-w-32 cursor-pointer select-none hover:text-white transition-colors"
+                        className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4 min-w-32 cursor-pointer select-none hover:text-[var(--color-text-primary)] transition-colors"
                       >
                         Student {sortBy === "name" && (sortDir === "asc" ? "▲" : "▼")}
                       </th>
                       {(subjects[selectedSem] || []).map((s) => (
-                        <th key={s} className="text-gray-400 text-xs py-2 px-2 text-center min-w-24">
+                        <th key={s} className="text-[var(--color-text-secondary)] text-xs py-2 px-2 text-center min-w-24">
                           {s}
                         </th>
                       ))}
@@ -633,10 +633,10 @@ export default function FacultyDashboard() {
                   </thead>
                   <tbody>
                     {STUDENTS.map((stu) => (
-                      <tr key={stu.id} className="border-b border-gray-800/50">
+                      <tr key={stu.id} className="border-b border-[var(--color-border)]/50">
                         <td className="py-3 pr-4">
-                          <p className="text-white text-xs font-medium">{stu.name}</p>
-                          <p className="text-gray-500 text-xs">{stu.usn || stu.id}</p>
+                          <p className="text-[var(--color-text-primary)] text-xs font-medium">{stu.name}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs">{stu.usn || stu.id}</p>
                         </td>
                         {(subjects[selectedSem] || []).map((subject) => {
                           const val = attendance[stu.id]?.[subject] ?? "";
@@ -655,9 +655,9 @@ export default function FacultyDashboard() {
                                     Number(e.target.value)
                                   )
                                 }
-                                className={`w-16 bg-gray-800 border rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:border-violet-500 transition-colors
+                                className={`w-16 bg-[var(--color-bg-surface-alt)] border rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:border-[var(--color-accent-solid)] transition-colors
                                   ${val === ""
-                                    ? "border-gray-700 text-white"
+                                    ? "border-[var(--color-border)] text-[var(--color-text-primary)]"
                                     : val >= 75
                                     ? "border-green-500/50 text-green-400"
                                     : val >= 60
@@ -671,7 +671,7 @@ export default function FacultyDashboard() {
                     ))}
                     {STUDENTS.length === 0 && (
                       <tr>
-                        <td colSpan={99} className="py-6 text-center text-gray-600 text-sm">
+                        <td colSpan={99} className="py-6 text-center text-[var(--color-text-muted)] text-sm">
                           No students found for {selectedSem}.
                         </td>
                       </tr>
@@ -679,7 +679,7 @@ export default function FacultyDashboard() {
                   </tbody>
                 </table>
                 {(subjects[selectedSem] || []).length === 0 && (
-                  <p className="text-gray-600 text-sm mt-4">
+                  <p className="text-[var(--color-text-muted)] text-sm mt-4">
                     ⚠ Add subjects first from the Subjects tab.
                   </p>
                 )}
@@ -689,38 +689,38 @@ export default function FacultyDashboard() {
 
           {/* ── MARK SHEETS — with total & scored editing ── */}
           {activeTab === "Mark Sheets" && (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
-                <h3 className="text-white font-semibold">🏆 Mark Sheets — {selectedSem}</h3>
+                <h3 className="text-[var(--color-text-primary)] font-semibold">🏆 Mark Sheets — {selectedSem}</h3>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500 text-xs font-medium">Sort by:</span>
+                  <span className="text-[var(--color-text-muted)] text-xs font-medium">Sort by:</span>
                   <button
                     onClick={() => toggleSort("name")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all flex items-center gap-1
-                      ${sortBy === "name" ? "bg-violet-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                      ${sortBy === "name" ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
                     Name {sortBy === "name" && (sortDir === "asc" ? "▲" : "▼")}
                   </button>
                   <button
                     onClick={() => toggleSort("usn")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all flex items-center gap-1
-                      ${sortBy === "usn" ? "bg-violet-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                      ${sortBy === "usn" ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
                     USN {sortBy === "usn" && (sortDir === "asc" ? "▲" : "▼")}
                   </button>
                 </div>
-                <p className="text-gray-500 text-xs">Edit scored / total marks per subject. Saves automatically.</p>
+                <p className="text-[var(--color-text-muted)] text-xs">Edit scored / total marks per subject. Saves automatically.</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800">
+                    <tr className="border-b border-[var(--color-border)]">
                       <th
                         onClick={() => toggleSort("name")}
-                        className="text-left text-gray-400 text-xs py-2 pr-4 min-w-32 cursor-pointer select-none hover:text-white transition-colors"
+                        className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4 min-w-32 cursor-pointer select-none hover:text-[var(--color-text-primary)] transition-colors"
                       >
                         Student {sortBy === "name" && (sortDir === "asc" ? "▲" : "▼")}
                       </th>
                       {(subjects[selectedSem] || []).map((s) => (
-                        <th key={s} className="text-gray-400 text-xs py-2 px-2 text-center min-w-36">
+                        <th key={s} className="text-[var(--color-text-secondary)] text-xs py-2 px-2 text-center min-w-36">
                           {s}
                         </th>
                       ))}
@@ -728,10 +728,10 @@ export default function FacultyDashboard() {
                   </thead>
                   <tbody>
                     {STUDENTS.map((stu) => (
-                      <tr key={stu.id} className="border-b border-gray-800/50">
+                      <tr key={stu.id} className="border-b border-[var(--color-border)]/50">
                         <td className="py-3 pr-4">
-                          <p className="text-white text-xs font-medium">{stu.name}</p>
-                          <p className="text-gray-500 text-xs">{stu.usn || stu.id}</p>
+                          <p className="text-[var(--color-text-primary)] text-xs font-medium">{stu.name}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs">{stu.usn || stu.id}</p>
                         </td>
                         {(subjects[selectedSem] || []).map((subject) => {
                           const markData = marks[stu.id]?.[subject];
@@ -751,16 +751,16 @@ export default function FacultyDashboard() {
                                   }
                                   placeholder="0"
                                   title="Marks scored"
-                                  className={`w-14 bg-gray-800 border rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:border-violet-500 transition-colors
+                                  className={`w-14 bg-[var(--color-bg-surface-alt)] border rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:border-[var(--color-accent-solid)] transition-colors
                                     ${scored === ""
-                                      ? "border-gray-700 text-white"
+                                      ? "border-[var(--color-border)] text-[var(--color-text-primary)]"
                                       : pct >= 75
                                       ? "border-green-500/50 text-green-400"
                                       : pct >= 50
                                       ? "border-amber-500/50 text-amber-400"
                                       : "border-red-500/50 text-red-400"}`}
                                 />
-                                <span className="text-gray-600 text-xs">/</span>
+                                <span className="text-[var(--color-text-muted)] text-xs">/</span>
                                 <input
                                   type="number"
                                   min="1"
@@ -769,7 +769,7 @@ export default function FacultyDashboard() {
                                     handleUpdateMark(stu.id, stu.name, subject, scored, e.target.value === "" ? 100 : Number(e.target.value))
                                   }
                                   title="Total marks"
-                                  className="w-14 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-center text-gray-400 focus:outline-none focus:border-violet-500"
+                                  className="w-14 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs text-center text-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent-solid)]"
                                 />
                               </div>
                               {pct !== null && (
@@ -785,7 +785,7 @@ export default function FacultyDashboard() {
                     ))}
                     {STUDENTS.length === 0 && (
                       <tr>
-                        <td colSpan={99} className="py-6 text-center text-gray-600 text-sm">
+                        <td colSpan={99} className="py-6 text-center text-[var(--color-text-muted)] text-sm">
                           No students found for {selectedSem}.
                         </td>
                       </tr>
@@ -793,7 +793,7 @@ export default function FacultyDashboard() {
                   </tbody>
                 </table>
                 {(subjects[selectedSem] || []).length === 0 && (
-                  <p className="text-gray-600 text-sm mt-4">
+                  <p className="text-[var(--color-text-muted)] text-sm mt-4">
                     ⚠ Add subjects first from the Subjects tab.
                   </p>
                 )}
@@ -804,55 +804,55 @@ export default function FacultyDashboard() {
           {/* ── NOTICE BOARD ── */}
           {activeTab === "Notice Board" && (
             <div className="space-y-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
-                <h3 className="text-white font-semibold">📢 Post Notice</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
+                <h3 className="text-[var(--color-text-primary)] font-semibold">📢 Post Notice</h3>
                 <input
                   value={noticeTitle}
                   onChange={(e) => setNoticeTitle(e.target.value)}
                   placeholder="Notice title..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 text-sm"
+                  className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm"
                 />
                 <textarea
                   value={noticeContent}
                   onChange={(e) => setNoticeContent(e.target.value)}
                   placeholder="Notice details (optional)..."
                   rows={3}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 text-sm resize-none"
+                  className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm resize-none"
                 />
                 <div className="flex gap-3">
                   <select
                     value={noticeTag}
                     onChange={(e) => setNoticeTag(e.target.value)}
-                    className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none cursor-pointer"
+                    className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer"
                   >
                     {["Notice", "Exam", "Event", "Holiday", "Urgent"].map((t) => <option key={t}>{t}</option>)}
                   </select>
                   <button
                     onClick={handlePostNotice}
                     disabled={!noticeTitle.trim()}
-                    className="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer"
+                    className="flex-1 px-4 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer"
                   >
                     📌 Post Notice
                   </button>
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
-                <h3 className="text-white font-semibold">All Notices ({notices.length})</h3>
-                {notices.length === 0 && <p className="text-gray-600 text-sm">No notices posted yet.</p>}
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
+                <h3 className="text-[var(--color-text-primary)] font-semibold">All Notices ({notices.length})</h3>
+                {notices.length === 0 && <p className="text-[var(--color-text-muted)] text-sm">No notices posted yet.</p>}
                 {notices.map((n) => (
-                  <div key={n.id} className="flex items-start justify-between gap-3 p-4 bg-gray-800 rounded-xl border-l-4 border-violet-500">
+                  <div key={n.id} className="flex items-start justify-between gap-3 p-4 bg-[var(--color-bg-surface-alt)] rounded-xl border-l-4 border-[var(--color-accent-solid)]">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs px-2 py-0.5 bg-violet-500/20 text-violet-400 rounded-full">{n.tag}</span>
-                        <span className="text-xs px-2 py-0.5 bg-gray-700 text-gray-400 rounded-full capitalize">{n.postedRole}</span>
+                        <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full">{n.tag}</span>
+                        <span className="text-xs px-2 py-0.5 bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] rounded-full capitalize">{n.postedRole}</span>
                       </div>
-                      <p className="text-white text-sm font-medium">{n.title}</p>
-                      {n.content && <p className="text-gray-400 text-xs mt-1">{n.content}</p>}
-                      <p className="text-gray-500 text-xs mt-1">{n.date} {n.time} · Posted by {n.postedBy}</p>
+                      <p className="text-[var(--color-text-primary)] text-sm font-medium">{n.title}</p>
+                      {n.content && <p className="text-[var(--color-text-secondary)] text-xs mt-1">{n.content}</p>}
+                      <p className="text-[var(--color-text-muted)] text-xs mt-1">{n.date} {n.time} · Posted by {n.postedBy}</p>
                     </div>
                     <button onClick={() => removeNotice(n.id)}
-                      className="text-gray-600 hover:text-red-400 cursor-pointer text-sm flex-shrink-0">🗑️</button>
+                      className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer text-sm flex-shrink-0">🗑️</button>
                   </div>
                 ))}
               </div>
@@ -862,24 +862,24 @@ export default function FacultyDashboard() {
           {/* ── GALLERY ── */}
           {activeTab === "Gallery" && (
             <div className="space-y-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
-                <h3 className="text-white font-semibold">📸 Upload Photo</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
+                <h3 className="text-[var(--color-text-primary)] font-semibold">📸 Upload Photo</h3>
                 <input
                   value={galleryCaption}
                   onChange={(e) => setGalleryCaption(e.target.value)}
                   placeholder="Caption (e.g. Hackathon Winners 2026)"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 text-sm"
+                  className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm"
                 />
                 <div
                   onClick={() => galleryFileRef.current?.click()}
                   className={`w-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all
-                    ${galleryFile ? "border-violet-500 bg-violet-500/10" : "border-gray-600 hover:border-gray-500 bg-gray-800/40"}`}
+                    ${galleryFile ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]" : "border-[var(--color-border)] hover:border-[var(--color-text-muted)] bg-[var(--color-bg-surface-alt)]/40"}`}
                 >
                   <span className="text-3xl">{galleryFile ? "🖼️" : "📁"}</span>
                   {galleryFile ? (
-                    <p className="text-violet-300 text-sm font-medium">{galleryFile.name}</p>
+                    <p className="text-[var(--color-accent-soft-text)] text-sm font-medium">{galleryFile.name}</p>
                   ) : (
-                    <p className="text-gray-300 text-sm font-medium">Click to browse photo</p>
+                    <p className="text-[var(--color-text-secondary)] text-sm font-medium">Click to browse photo</p>
                   )}
                   <input
                     ref={galleryFileRef}
@@ -892,7 +892,7 @@ export default function FacultyDashboard() {
                 <button
                   onClick={handleUploadGalleryPhoto}
                   disabled={!galleryCaption.trim() || !galleryFile || galleryUploading}
-                  className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer"
+                  className="w-full py-3 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer"
                 >
                   {galleryUploading ? "⏳ Uploading..." : "📤 Upload to Gallery"}
                 </button>
@@ -903,22 +903,22 @@ export default function FacultyDashboard() {
                 )}
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">Gallery ({gallery.length})</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Gallery ({gallery.length})</h3>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {gallery.length === 0 && (
-                    <p className="text-gray-600 text-sm col-span-4">No photos uploaded yet.</p>
+                    <p className="text-[var(--color-text-muted)] text-sm col-span-4">No photos uploaded yet.</p>
                   )}
                   {gallery.map((g) => (
-                    <div key={g.id} className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 group relative">
+                    <div key={g.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl overflow-hidden border border-[var(--color-border)] group relative">
                       {g.url ? (
                         <img src={g.url} alt={g.caption} className="w-full h-32 object-cover" />
                       ) : (
-                        <div className="w-full h-32 bg-gray-700 flex items-center justify-center text-3xl">🖼️</div>
+                        <div className="w-full h-32 bg-[var(--color-bg-hover)] flex items-center justify-center text-3xl">🖼️</div>
                       )}
                       <div className="p-2">
-                        <p className="text-white text-xs font-medium truncate">{g.caption}</p>
-                        <p className="text-gray-500 text-xs">{g.uploadedBy}</p>
+                        <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{g.caption}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">{g.uploadedBy}</p>
                       </div>
                       <button
                         onClick={() => removeGalleryPhoto(g.id)}

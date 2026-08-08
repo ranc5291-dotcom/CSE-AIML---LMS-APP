@@ -62,7 +62,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const navigate         = useNavigate();
   const location         = useLocation();
 
-  // Desktop collapse state — independent from mobile open/close
   const [collapsed, setCollapsed] = useState(false);
 
   const items = NAV_ITEMS[user?.role] || NAV_ITEMS.student;
@@ -79,7 +78,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
   const roleColor = ROLE_COLORS[user?.role] || ROLE_COLORS.student;
 
-  // What to show under the name: USN for students, role for everyone else
   const subLabel =
     user?.role === "student"
       ? (user?.usn || "Student")
@@ -92,33 +90,32 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
       )}
 
       <aside className={`
-        fixed top-0 left-0 h-full bg-gray-900 border-r border-gray-800 z-30 flex flex-col
+        fixed top-0 left-0 h-full bg-[var(--color-bg-surface)] border-r border-[var(--color-border)] z-30 flex flex-col
         transition-all duration-300
         ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0 lg:static lg:z-auto
         ${collapsed ? "w-20" : "w-64"}
       `}>
         {/* Logo + collapse toggle */}
-        <div className="p-5 border-b border-gray-800 flex items-center justify-between">
+        <div className="p-5 border-b border-[var(--color-border)] flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <div className={`w-9 h-9 flex-shrink-0 rounded-xl bg-gradient-to-br ${roleColor} flex items-center justify-center text-lg shadow-lg`}>
               🏫
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <p className="text-white font-bold text-sm leading-tight truncate">CSEAIML</p>
-                <p className="text-gray-500 text-xs truncate">LMS Portal</p>
+                <p className="text-[var(--color-text-primary)] font-bold text-sm leading-tight truncate">CSEAIML</p>
+                <p className="text-[var(--color-text-muted)] text-xs truncate">LMS Portal</p>
               </div>
             )}
           </div>
 
-          {/* Toggle button — collapses/expands on desktop, closes on mobile */}
           <button
             onClick={() => {
               setCollapsed((c) => !c);
               setMobileOpen && setMobileOpen(false);
             }}
-            className="w-7 h-7 flex-shrink-0 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white cursor-pointer transition-all"
+            className="w-7 h-7 flex-shrink-0 rounded-lg bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-all"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? "»" : "«"}
@@ -126,15 +123,15 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         </div>
 
         {/* User info */}
-        <div className="px-4 py-3 border-b border-gray-800 mx-3 mt-3 rounded-xl bg-gray-800/50">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] mx-3 mt-3 rounded-xl bg-[var(--color-bg-surface-alt)]">
           {collapsed ? (
-            <p className="text-white text-sm font-semibold text-center">
+            <p className="text-[var(--color-text-primary)] text-sm font-semibold text-center">
               {(user?.name || "?").charAt(0).toUpperCase()}
             </p>
           ) : (
             <>
-              <p className="text-white text-sm font-semibold truncate">{user?.name}</p>
-              <p className="text-gray-400 text-xs capitalize truncate">{subLabel}</p>
+              <p className="text-[var(--color-text-primary)] text-sm font-semibold truncate">{user?.name}</p>
+              <p className="text-[var(--color-text-secondary)] text-xs capitalize truncate">{subLabel}</p>
             </>
           )}
         </div>
@@ -152,8 +149,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer text-left
                   ${collapsed ? "justify-center" : ""}
                   ${isCurrentPage
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
-                    : "text-gray-400 hover:text-white hover:bg-gray-800"
+                    ? "bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] text-white shadow-lg"
+                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)]"
                   }`}
               >
                 <span className="text-base">{item.icon}</span>
@@ -164,10 +161,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         </nav>
 
         {/* Logout */}
-        <div className="p-3 border-t border-gray-800">
+        <div className="p-3 border-t border-[var(--color-border)]">
           <button onClick={handleLogout}
             title={collapsed ? "Logout" : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 cursor-pointer
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--color-text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 cursor-pointer
               ${collapsed ? "justify-center" : ""}`}>
             <span>🚪</span> {!collapsed && "Logout"}
           </button>

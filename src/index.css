@@ -1,1 +1,57 @@
 @import "tailwindcss";
+
+/* Enables `dark:` variant to respond to a .dark class on <html>,
+   instead of the OS-level prefers-color-scheme (which Tailwind v4 uses by default) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* ---- Light theme (default) ---- */
+  --color-bg-app: #f7f7fb;         /* page background, behind cards */
+  --color-bg-surface: #ffffff;     /* cards, sidebar, navbar */
+  --color-bg-surface-alt: #f4f4f8; /* nested surfaces, inputs */
+  --color-bg-hover: #eef0f6;
+
+  --color-text-primary: #111318;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  --color-border: #e6e7ec;
+
+  --color-accent-from: #8b5cf6;    /* purple */
+  --color-accent-to: #ec4899;      /* pink */
+  --color-accent-solid: #7c3aed;
+  --color-accent-soft-bg: #f3ecff;
+  --color-accent-soft-text: #7c3aed;
+
+  --app-font-scale: 1;
+}
+
+.dark {
+  /* ---- Dark theme (your current look) ---- */
+  --color-bg-app: #0a0e17;
+  --color-bg-surface: #111827;      /* your old bg-gray-900 */
+  --color-bg-surface-alt: #1f2937;  /* your old bg-gray-800 */
+  --color-bg-hover: #1f2937;
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #9ca3af;  /* gray-400 */
+  --color-text-muted: #6b7280;      /* gray-500 */
+
+  --color-border: #1f2937;          /* gray-800 */
+
+  --color-accent-from: #3b82f6;
+  --color-accent-to: #7c3aed;
+  --color-accent-solid: #2563eb;
+  --color-accent-soft-bg: rgba(59, 130, 246, 0.15);
+  --color-accent-soft-text: #60a5fa;
+}
+
+html {
+  font-size: calc(16px * var(--app-font-scale));
+}
+
+body {
+  background-color: var(--color-bg-app);
+  color: var(--color-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}

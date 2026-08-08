@@ -36,22 +36,22 @@ function SubjectPopup({ subject, sem, notes, assignments, onClose, onOpenPDF }) 
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-gray-800">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
           <div>
-            <h2 className="text-white font-bold text-lg">Subject: {subject}</h2>
-            <p className="text-gray-400 text-xs mt-0.5">{sem} - Click a file to view or download</p>
+            <h2 className="text-[var(--color-text-primary)] font-bold text-lg">Subject: {subject}</h2>
+            <p className="text-[var(--color-text-secondary)] text-xs mt-0.5">{sem} - Click a file to view or download</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white cursor-pointer transition-all">
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-all">
             X
           </button>
         </div>
 
-        <div className="flex gap-1 p-3 border-b border-gray-800">
+        <div className="flex gap-1 p-3 border-b border-[var(--color-border)]">
           {TABS.map((t) => {
             const tabClass = tab === t
-              ? "flex-1 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer bg-blue-600 text-white"
-              : "flex-1 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer bg-gray-800 text-gray-400 hover:text-white";
+              ? "flex-1 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer bg-[var(--color-accent-solid)] text-white"
+              : "flex-1 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]";
             const count = t === "Notes" ? subjectNotes.filter((n) => n.type !== "PYQ").length :
               t === "Assignments" ? subjectAssignments.length :
               subjectPYQ.length;
@@ -68,36 +68,36 @@ function SubjectPopup({ subject, sem, notes, assignments, onClose, onOpenPDF }) 
           {(tab === "Notes" || tab === "PYQ") && (
             <>
               {displayNotes.length === 0 && (
-                <div className="text-center py-10 text-gray-600">
+                <div className="text-center py-10 text-[var(--color-text-muted)]">
                   <p className="text-sm">No {tab === "PYQ" ? "Previous Year Questions" : "notes"} uploaded yet for {subject}</p>
                   <p className="text-xs mt-1">Faculty will upload them soon</p>
                 </div>
               )}
               {displayNotes.map((note) => {
                 const viewClass = note.fileUrl
-                  ? "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-blue-400 hover:bg-blue-500/10"
-                  : "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-gray-600 cursor-not-allowed";
+                  ? "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)]"
+                  : "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-[var(--color-text-muted)] cursor-not-allowed";
                 const downloadClass = note.fileUrl
                   ? "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-green-400 hover:bg-green-500/10 cursor-pointer"
-                  : "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-gray-600 pointer-events-none";
+                  : "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-[var(--color-text-muted)] pointer-events-none";
                 return (
-                  <div key={note.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden hover:border-gray-600 transition-all">
+                  <div key={note.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] overflow-hidden hover:border-[var(--color-text-muted)] transition-all">
                     <div className="flex items-center gap-3 p-3">
                       <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center text-lg flex-shrink-0">
                         {note.type === "PYQ" ? "PYQ" : "PDF"}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-white text-xs font-medium truncate">{note.file}</p>
-                        <p className="text-gray-500 text-xs">
-                          <span className="text-blue-400">{note.type}</span> - {note.uploadedBy}
+                        <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">
+                          <span className="text-[var(--color-accent-soft-text)]">{note.type}</span> - {note.uploadedBy}
                           {note.size && ` - ${note.size}`}
                         </p>
                       </div>
-                      <span className="text-gray-600 text-xs flex-shrink-0">{note.date}</span>
+                      <span className="text-[var(--color-text-muted)] text-xs flex-shrink-0">{note.date}</span>
                     </div>
-                    <div className="flex border-t border-gray-700">
+                    <div className="flex border-t border-[var(--color-border)]">
                       <button onClick={() => onOpenPDF(note.fileUrl, note.file)} disabled={!note.fileUrl} className={viewClass}>View</button>
-                      <div className="w-px bg-gray-700" />
+                      <div className="w-px bg-[var(--color-border)]" />
                       <a href={note.fileUrl || "#"} target="_blank" rel="noreferrer" download={note.file} className={downloadClass}>Download</a>
                     </div>
                   </div>
@@ -109,25 +109,25 @@ function SubjectPopup({ subject, sem, notes, assignments, onClose, onOpenPDF }) 
           {tab === "Assignments" && (
             <>
               {subjectAssignments.length === 0 && (
-                <div className="text-center py-10 text-gray-600">
+                <div className="text-center py-10 text-[var(--color-text-muted)]">
                   <p className="text-sm">No assignments for {subject} yet</p>
                 </div>
               )}
               {subjectAssignments.map((a) => (
-                <div key={a.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden border-l-4 border-l-amber-500">
+                <div key={a.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] overflow-hidden border-l-4 border-l-amber-500">
                   <div className="p-3">
-                    <p className="text-white text-sm font-medium">{a.title}</p>
-                    <p className="text-gray-500 text-xs mt-1">
+                    <p className="text-[var(--color-text-primary)] text-sm font-medium">{a.title}</p>
+                    <p className="text-[var(--color-text-muted)] text-xs mt-1">
                       Due: <span className="text-amber-400 font-medium">{a.due}</span>
                       {a.uploadedBy && ` - by ${a.uploadedBy}`}
                     </p>
                   </div>
                   {a.fileUrl && (
-                    <div className="flex border-t border-gray-700">
-                      <button onClick={() => onOpenPDF(a.fileUrl, a.title)} className="flex-1 py-2 text-xs font-medium text-blue-400 hover:bg-blue-500/10 cursor-pointer flex items-center justify-center gap-1">
+                    <div className="flex border-t border-[var(--color-border)]">
+                      <button onClick={() => onOpenPDF(a.fileUrl, a.title)} className="flex-1 py-2 text-xs font-medium text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)] cursor-pointer flex items-center justify-center gap-1">
                         View
                       </button>
-                      <div className="w-px bg-gray-700" />
+                      <div className="w-px bg-[var(--color-border)]" />
                       <a href={a.fileUrl} download={a.title} target="_blank" rel="noreferrer" className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer flex items-center justify-center gap-1">
                         Download
                       </a>
@@ -147,17 +147,17 @@ function PromotionPopup({ promo, onAcknowledge }) {
   if (!promo) return null;
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-6 text-center shadow-2xl">
-        <h2 className="text-white font-bold text-xl mb-2">Congratulations!</h2>
-        <p className="text-gray-300 text-sm mb-4">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-md p-6 text-center shadow-2xl">
+        <h2 className="text-[var(--color-text-primary)] font-bold text-xl mb-2">Congratulations!</h2>
+        <p className="text-[var(--color-text-secondary)] text-sm mb-4">
           You've been promoted from{" "}
-          <span className="text-white font-semibold">{promo.fromSem}</span> ({promo.fromYear}) to{" "}
+          <span className="text-[var(--color-text-primary)] font-semibold">{promo.fromSem}</span> ({promo.fromYear}) to{" "}
           <span className="text-green-400 font-semibold">{promo.toSem}</span> ({promo.toYear}).
         </p>
-        <p className="text-gray-500 text-xs mb-6">
+        <p className="text-[var(--color-text-muted)] text-xs mb-6">
           Your marks and attendance history have been retained - nothing was lost.
         </p>
-        <button onClick={onAcknowledge} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold cursor-pointer transition-all">
+        <button onClick={onAcknowledge} className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold cursor-pointer transition-all">
           Got it!
         </button>
       </div>
@@ -261,7 +261,7 @@ export default function StudentDashboard() {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-[var(--color-bg-app)] overflow-hidden">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -269,28 +269,28 @@ export default function StudentDashboard() {
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
 
-          <div className="bg-gradient-to-r from-blue-600 to-violet-600 rounded-2xl p-5 text-white shadow-lg shadow-blue-500/20">
-            <p className="text-blue-100 text-sm mb-1">Welcome back</p>
+          <div className="bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] rounded-2xl p-5 text-white shadow-lg shadow-[var(--color-accent-solid)]/20">
+            <p className="text-white/80 text-sm mb-1">Welcome back</p>
             <h2 className="text-2xl font-bold">{user?.name}</h2>
-            <p className="text-blue-100 text-sm mt-1">
+            <p className="text-white/80 text-sm mt-1">
               {user?.branch || "CSEAIML"} - {user?.usn || user?.id} - {user?.year} - {user?.sem}
             </p>
           </div>
 
           {upcomingEvents.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-white font-semibold text-sm">Upcoming Events</h3>
+                <h3 className="text-[var(--color-text-primary)] font-semibold text-sm">Upcoming Events</h3>
               </div>
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {upcomingEvents.map((e) => (
-                  <div key={e.id} className="flex-shrink-0 bg-gray-800 rounded-xl p-3 border border-gray-700 min-w-48">
+                  <div key={e.id} className="flex-shrink-0 bg-[var(--color-bg-surface-alt)] rounded-xl p-3 border border-[var(--color-border)] min-w-48">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full">{e.tag}</span>
+                      <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full">{e.tag}</span>
                     </div>
-                    <p className="text-white text-xs font-semibold truncate">{e.title}</p>
-                    <p className="text-gray-500 text-xs mt-1">{e.date} - {e.time}</p>
-                    <p className="text-gray-500 text-xs">{e.venue}</p>
+                    <p className="text-[var(--color-text-primary)] text-xs font-semibold truncate">{e.title}</p>
+                    <p className="text-[var(--color-text-muted)] text-xs mt-1">{e.date} - {e.time}</p>
+                    <p className="text-[var(--color-text-muted)] text-xs">{e.venue}</p>
                   </div>
                 ))}
               </div>
@@ -299,10 +299,10 @@ export default function StudentDashboard() {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {STATS.map((stat) => (
-              <button key={stat.label} onClick={stat.onClick} className="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-left cursor-pointer hover:border-gray-600 transition-all">
+              <button key={stat.label} onClick={stat.onClick} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 text-left cursor-pointer hover:border-[var(--color-text-muted)] transition-all">
                 <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-lg mb-3`}></div>
-                <p className="text-2xl font-bold text-white">{stat.value}</p>
-                <p className="text-gray-400 text-xs mt-0.5">{stat.label}</p>
+                <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stat.value}</p>
+                <p className="text-[var(--color-text-secondary)] text-xs mt-0.5">{stat.label}</p>
               </button>
             ))}
           </div>
@@ -310,8 +310,8 @@ export default function StudentDashboard() {
           <div className="flex gap-2 flex-wrap">
             {DASHBOARD_TABS.map((tab) => {
               const tabClass = activeTab === tab
-                ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-blue-600 text-white"
-                : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-gray-800 text-gray-400 hover:text-white";
+                ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-accent-solid)] text-white"
+                : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]";
               return (
                 <button key={tab} onClick={() => setActiveTab(tab)} className={tabClass}>
                   {tab}
@@ -323,23 +323,23 @@ export default function StudentDashboard() {
           {activeTab === "Overview" && (
             <div className="space-y-4">
 
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <h3 className="text-white font-semibold">Notice Board</h3>
-                  <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full ml-auto">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">Notice Board</h3>
+                  <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full ml-auto">
                     {allNotices.length} notices
                   </span>
                 </div>
                 <div className="space-y-3">
                   {allNotices.length === 0 && (
-                    <p className="text-gray-600 text-sm">No notices yet.</p>
+                    <p className="text-[var(--color-text-muted)] text-sm">No notices yet.</p>
                   )}
                   {allNotices.map((n) => {
                     const cardClass =
-                      n.tag === "Urgent" ? "p-3 bg-gray-800 rounded-xl border-l-4 border-red-500" :
-                      n.tag === "Exam" ? "p-3 bg-gray-800 rounded-xl border-l-4 border-amber-500" :
-                      n.tag === "Event" ? "p-3 bg-gray-800 rounded-xl border-l-4 border-green-500" :
-                      "p-3 bg-gray-800 rounded-xl border-l-4 border-blue-500";
+                      n.tag === "Urgent" ? "p-3 bg-[var(--color-bg-surface-alt)] rounded-xl border-l-4 border-red-500" :
+                      n.tag === "Exam" ? "p-3 bg-[var(--color-bg-surface-alt)] rounded-xl border-l-4 border-amber-500" :
+                      n.tag === "Event" ? "p-3 bg-[var(--color-bg-surface-alt)] rounded-xl border-l-4 border-green-500" :
+                      "p-3 bg-[var(--color-bg-surface-alt)] rounded-xl border-l-4 border-blue-500";
                     const tagClass =
                       n.tag === "Urgent" ? "text-xs px-2 py-0.5 rounded-full flex-shrink-0 bg-red-500/20 text-red-400" :
                       n.tag === "Exam" ? "text-xs px-2 py-0.5 rounded-full flex-shrink-0 bg-amber-500/20 text-amber-400" :
@@ -348,11 +348,11 @@ export default function StudentDashboard() {
                     return (
                       <div key={n.id} className={cardClass}>
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-white text-xs font-medium leading-snug">{n.title}</p>
+                          <p className="text-[var(--color-text-primary)] text-xs font-medium leading-snug">{n.title}</p>
                           <span className={tagClass}>{n.tag}</span>
                         </div>
-                        {n.content && <p className="text-gray-400 text-xs mt-1">{n.content}</p>}
-                        <p className="text-gray-500 text-xs mt-1">
+                        {n.content && <p className="text-[var(--color-text-secondary)] text-xs mt-1">{n.content}</p>}
+                        <p className="text-[var(--color-text-muted)] text-xs mt-1">
                           {n.time || n.date} - {n.postedBy}
                           {n.postedRole && ` (${n.postedRole})`}
                         </p>
@@ -362,28 +362,28 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">Assignment Reminders</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Assignment Reminders</h3>
                 <div className="space-y-3">
                   {myAssignments.length === 0 && (
-                    <div className="text-center py-5 text-gray-600">
+                    <div className="text-center py-5 text-[var(--color-text-muted)]">
                       <p className="text-sm">No pending assignments</p>
                     </div>
                   )}
                   {myAssignments.map((a) => (
-                    <div key={a.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden border-l-4 border-l-amber-500">
+                    <div key={a.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] overflow-hidden border-l-4 border-l-amber-500">
                       <div className="p-3">
-                        <p className="text-white text-xs font-medium">{a.title}</p>
-                        <p className="text-gray-500 text-xs mt-1">
+                        <p className="text-[var(--color-text-primary)] text-xs font-medium">{a.title}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs mt-1">
                           {a.subject} - Due: <span className="text-amber-400">{a.due}</span>
                         </p>
                       </div>
                       {a.fileUrl && (
-                        <div className="flex border-t border-gray-700">
-                          <button onClick={() => openPDF(a.fileUrl, a.title)} className="flex-1 py-2 text-xs font-medium text-blue-400 hover:bg-blue-500/10 cursor-pointer flex items-center justify-center gap-1">
+                        <div className="flex border-t border-[var(--color-border)]">
+                          <button onClick={() => openPDF(a.fileUrl, a.title)} className="flex-1 py-2 text-xs font-medium text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)] cursor-pointer flex items-center justify-center gap-1">
                             View
                           </button>
-                          <div className="w-px bg-gray-700" />
+                          <div className="w-px bg-[var(--color-border)]" />
                           <a href={a.fileUrl} download={a.title} target="_blank" rel="noreferrer" className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer flex items-center justify-center gap-1">
                             Download
                           </a>
@@ -395,14 +395,14 @@ export default function StudentDashboard() {
               </div>
 
               {gallery && gallery.length > 0 && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-white font-semibold">Branch Gallery</h3>
-                    <span className="text-gray-500 text-xs">{gallery.length} photos</span>
+                    <h3 className="text-[var(--color-text-primary)] font-semibold">Branch Gallery</h3>
+                    <span className="text-[var(--color-text-muted)] text-xs">{gallery.length} photos</span>
                   </div>
                   <div className="grid grid-cols-3 lg:grid-cols-4 gap-2">
                     {gallery.slice(0, 8).map((g) => (
-                      <div key={g.id} className="rounded-xl overflow-hidden aspect-square bg-gray-800">
+                      <div key={g.id} className="rounded-xl overflow-hidden aspect-square bg-[var(--color-bg-surface-alt)]">
                         {g.url ? (
                           <img src={g.url} alt={g.caption} className="w-full h-full object-cover" />
                         ) : (
@@ -415,18 +415,18 @@ export default function StudentDashboard() {
               )}
 
               {openCompanies.length > 0 && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-white font-semibold">Open Placement Drives</h3>
+                    <h3 className="text-[var(--color-text-primary)] font-semibold">Open Placement Drives</h3>
                     <button onClick={() => setActiveTab("Placement")} className="text-amber-400 text-xs hover:text-amber-300 cursor-pointer">View All</button>
                   </div>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     {openCompanies.slice(0, 4).map((c) => (
-                      <div key={c.id} className="bg-gray-800 rounded-xl p-3 border border-gray-700">
+                      <div key={c.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3 border border-[var(--color-border)]">
                         <div className="flex items-start justify-between mb-1">
                           <div>
-                            <p className="text-white text-xs font-bold">{c.name}</p>
-                            <p className="text-gray-400 text-xs">{c.role}</p>
+                            <p className="text-[var(--color-text-primary)] text-xs font-bold">{c.name}</p>
+                            <p className="text-[var(--color-text-secondary)] text-xs">{c.role}</p>
                           </div>
                           <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full">Open</span>
                         </div>
@@ -441,13 +441,13 @@ export default function StudentDashboard() {
 
           {activeTab === "Notes & Subjects" && (
             <div className="space-y-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">Subjects by Year & Semester</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Subjects by Year & Semester</h3>
                 <div className="flex gap-2 flex-wrap mb-3">
                   {YEARS.map((year) => {
                     const yearClass = selectedYear.label === year.label
-                      ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-blue-600 text-white"
-                      : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-gray-800 text-gray-400 hover:text-white";
+                      ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-accent-solid)] text-white"
+                      : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]";
                     return (
                       <button key={year.label} onClick={() => { setSelectedYear(year); setSelectedSem(year.sems[0]); }} className={yearClass}>
                         {year.label}
@@ -458,8 +458,8 @@ export default function StudentDashboard() {
                 <div className="flex gap-2 mb-5">
                   {selectedYear.sems.map((sem) => {
                     const semClass = selectedSem === sem
-                      ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-violet-600 text-white"
-                      : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-gray-800 text-gray-400 hover:text-white";
+                      ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-accent-to)] text-white"
+                      : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]";
                     return (
                       <button key={sem} onClick={() => setSelectedSem(sem)} className={semClass}>
                         {sem}
@@ -476,26 +476,26 @@ export default function StudentDashboard() {
                       (a) => a.subject === subject && a.sem === selectedSem
                     ).length;
                     return (
-                      <button key={subject} onClick={() => setSubjectPopup({ subject, sem: selectedSem })} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500/50 rounded-xl p-4 cursor-pointer transition-all group text-left">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 flex items-center justify-center text-xl mb-3 group-hover:scale-110 transition-transform"></div>
-                        <p className="text-white text-xs font-semibold leading-tight mb-2">{subject}</p>
-                        <p className="text-gray-500 text-xs">{selectedSem}</p>
+                      <button key={subject} onClick={() => setSubjectPopup({ subject, sem: selectedSem })} className="bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] hover:border-[var(--color-accent-solid)]/50 rounded-xl p-4 cursor-pointer transition-all group text-left">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-accent-from)]/20 to-[var(--color-accent-to)]/20 flex items-center justify-center text-xl mb-3 group-hover:scale-110 transition-transform"></div>
+                        <p className="text-[var(--color-text-primary)] text-xs font-semibold leading-tight mb-2">{subject}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">{selectedSem}</p>
                         <div className="flex gap-2 mt-2">
                           {subjectNotesCount > 0 && (
-                            <span className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded-md">{subjectNotesCount}</span>
+                            <span className="text-xs px-1.5 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-md">{subjectNotesCount}</span>
                           )}
                           {subjectAssignCount > 0 && (
                             <span className="text-xs px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md">{subjectAssignCount}</span>
                           )}
                           {subjectNotesCount === 0 && subjectAssignCount === 0 && (
-                            <span className="text-xs text-gray-600">Tap to open</span>
+                            <span className="text-xs text-[var(--color-text-muted)]">Tap to open</span>
                           )}
                         </div>
                       </button>
                     );
                   })}
                   {(subjects[selectedSem] || []).length === 0 && (
-                    <div className="col-span-4 text-center py-8 text-gray-600">
+                    <div className="col-span-4 text-center py-8 text-[var(--color-text-muted)]">
                       <p className="text-sm">No subjects added yet for {selectedSem}</p>
                       <p className="text-xs mt-1">Faculty will add subjects soon</p>
                     </div>
@@ -503,37 +503,37 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">All Notes & PYQs - {selectedSem}</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">All Notes & PYQs - {selectedSem}</h3>
                 <div className="space-y-3">
                   {notes.filter((n) => n.sem === selectedSem).length === 0 && (
-                    <div className="text-center py-6 text-gray-600">
+                    <div className="text-center py-6 text-[var(--color-text-muted)]">
                       <p className="text-sm">No files uploaded yet for {selectedSem}</p>
                     </div>
                   )}
                   {notes.filter((n) => n.sem === selectedSem).map((note) => {
                     const viewClass = note.fileUrl
-                      ? "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-blue-400 hover:bg-blue-500/10"
-                      : "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-gray-600 cursor-not-allowed";
+                      ? "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)]"
+                      : "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-[var(--color-text-muted)] cursor-not-allowed";
                     const downloadClass = note.fileUrl
                       ? "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-green-400 hover:bg-green-500/10 cursor-pointer"
-                      : "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-gray-600 pointer-events-none";
+                      : "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-[var(--color-text-muted)] pointer-events-none";
                     return (
-                      <div key={note.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden hover:border-gray-600 transition-all">
+                      <div key={note.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] overflow-hidden hover:border-[var(--color-text-muted)] transition-all">
                         <div className="flex items-center gap-3 p-3">
                           <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center text-lg flex-shrink-0"></div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-white text-xs font-medium truncate">{note.file}</p>
-                            <p className="text-gray-500 text-xs">
-                              {note.subject} - <span className="text-blue-400">{note.type}</span> - {note.uploadedBy}
+                            <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
+                            <p className="text-[var(--color-text-muted)] text-xs">
+                              {note.subject} - <span className="text-[var(--color-accent-soft-text)]">{note.type}</span> - {note.uploadedBy}
                               {note.size && ` - ${note.size}`}
                             </p>
                           </div>
-                          <span className="text-gray-600 text-xs flex-shrink-0">{note.date}</span>
+                          <span className="text-[var(--color-text-muted)] text-xs flex-shrink-0">{note.date}</span>
                         </div>
-                        <div className="flex border-t border-gray-700">
+                        <div className="flex border-t border-[var(--color-border)]">
                           <button onClick={() => openPDF(note.fileUrl, note.file)} disabled={!note.fileUrl} className={viewClass}>View</button>
-                          <div className="w-px bg-gray-700" />
+                          <div className="w-px bg-[var(--color-border)]" />
                           <a href={note.fileUrl || "#"} target="_blank" rel="noreferrer" download={note.file} className={downloadClass}>Download</a>
                         </div>
                       </div>
@@ -546,10 +546,10 @@ export default function StudentDashboard() {
 
           {activeTab === "Placement" && (
             <div className="space-y-5">
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">Company Drives ({companies.length})</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Company Drives ({companies.length})</h3>
                 {companies.length === 0 && (
-                  <div className="text-center py-8 text-gray-600">
+                  <div className="text-center py-8 text-[var(--color-text-muted)]">
                     <p className="text-sm">No companies listed yet.</p>
                   </div>
                 )}
@@ -559,22 +559,22 @@ export default function StudentDashboard() {
                       ? "text-xs px-2 py-1 rounded-lg font-medium bg-green-500/20 text-green-400"
                       : "text-xs px-2 py-1 rounded-lg font-medium bg-red-500/20 text-red-400";
                     return (
-                      <div key={c.id} className="bg-gray-800 rounded-2xl p-4 border border-gray-700 space-y-3">
+                      <div key={c.id} className="bg-[var(--color-bg-surface-alt)] rounded-2xl p-4 border border-[var(--color-border)] space-y-3">
                         <div className="flex items-start justify-between">
                           <div>
-                            <h4 className="text-white font-bold">{c.name}</h4>
-                            <p className="text-gray-400 text-sm">{c.role}</p>
+                            <h4 className="text-[var(--color-text-primary)] font-bold">{c.name}</h4>
+                            <p className="text-[var(--color-text-secondary)] text-sm">{c.role}</p>
                           </div>
                           <span className={statusClass}>{c.status}</span>
                         </div>
-                        {c.description && <p className="text-gray-400 text-xs">{c.description}</p>}
+                        {c.description && <p className="text-[var(--color-text-secondary)] text-xs">{c.description}</p>}
                         {c.eligibility && (
                           <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
                             <p className="text-blue-300 text-xs font-semibold mb-0.5">Eligibility</p>
                             <p className="text-blue-200 text-xs">{c.eligibility}</p>
                           </div>
                         )}
-                        <div className="flex flex-wrap gap-3 text-xs text-gray-400">
+                        <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)]">
                           <span>{c.package}</span>
                           {c.deadline && <span>Deadline: {c.deadline}</span>}
                         </div>
@@ -596,15 +596,15 @@ export default function StudentDashboard() {
               </div>
 
               {placementUploads.length > 0 && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                  <h3 className="text-white font-semibold mb-4">Placement Resources</h3>
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Placement Resources</h3>
                   <div className="space-y-2">
                     {placementUploads.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 border border-gray-700">
+                      <div key={item.id} className="flex items-center justify-between bg-[var(--color-bg-surface-alt)] rounded-xl px-4 py-3 border border-[var(--color-border)]">
                         <div className="flex items-center gap-3">
                           <div>
-                            <p className="text-white text-xs font-medium">{item.title}</p>
-                            <p className="text-gray-500 text-xs">{item.category} - {item.uploadedBy} - {item.date}</p>
+                            <p className="text-[var(--color-text-primary)] text-xs font-medium">{item.title}</p>
+                            <p className="text-[var(--color-text-muted)] text-xs">{item.category} - {item.uploadedBy} - {item.date}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -614,7 +614,7 @@ export default function StudentDashboard() {
                             </button>
                           )}
                           {(item.fileUrl || item.link) && (
-                            <a href={item.fileUrl || item.link} target="_blank" rel="noreferrer" download={item.fileName || undefined} className="px-3 py-1.5 bg-blue-600/20 text-blue-400 rounded-lg text-xs hover:bg-blue-600/30 transition-all">
+                            <a href={item.fileUrl || item.link} target="_blank" rel="noreferrer" download={item.fileName || undefined} className="px-3 py-1.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs hover:opacity-80 transition-all">
                               {item.fileUrl ? "Download" : "Open"}
                             </a>
                           )}
@@ -626,14 +626,14 @@ export default function StudentDashboard() {
               )}
 
               {dsaList.length > 0 && (
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                  <h3 className="text-white font-semibold mb-4">DSA Practice Questions ({dsaList.length})</h3>
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">DSA Practice Questions ({dsaList.length})</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-800">
+                        <tr className="border-b border-[var(--color-border)]">
                           {["#", "Problem", "Topic", "Difficulty"].map((h) => (
-                            <th key={h} className="text-left text-gray-400 text-xs py-2 px-3">{h}</th>
+                            <th key={h} className="text-left text-[var(--color-text-secondary)] text-xs py-2 px-3">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -644,12 +644,12 @@ export default function StudentDashboard() {
                             d.difficulty === "Medium" ? "text-xs px-2 py-0.5 rounded-lg font-medium bg-amber-500/20 text-amber-400" :
                             "text-xs px-2 py-0.5 rounded-lg font-medium bg-red-500/20 text-red-400";
                           return (
-                            <tr key={d.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                              <td className="py-2 px-3 text-gray-500 text-xs">{i + 1}</td>
+                            <tr key={d.id} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg-hover)]/50 transition-colors">
+                              <td className="py-2 px-3 text-[var(--color-text-muted)] text-xs">{i + 1}</td>
                               <td className="py-2 px-3">
-                                <a href={d.link || "#"} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 text-xs font-medium">{d.title}</a>
+                                <a href={d.link || "#"} target="_blank" rel="noreferrer" className="text-[var(--color-accent-soft-text)] hover:opacity-80 text-xs font-medium">{d.title}</a>
                               </td>
-                              <td className="py-2 px-3 text-gray-400 text-xs">{d.topic}</td>
+                              <td className="py-2 px-3 text-[var(--color-text-secondary)] text-xs">{d.topic}</td>
                               <td className="py-2 px-3">
                                 <span className={diffClass}>{d.difficulty}</span>
                               </td>
@@ -666,11 +666,11 @@ export default function StudentDashboard() {
 
           {activeTab === "Marks" && (
             <div className="space-y-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">My Marks</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">My Marks</h3>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {Object.entries(myMarks).length === 0 && (
-                    <p className="text-gray-600 text-sm col-span-4">No marks recorded yet.</p>
+                    <p className="text-[var(--color-text-muted)] text-sm col-span-4">No marks recorded yet.</p>
                   )}
                   {Object.entries(myMarks).map(([subject, markData]) => {
                     const scored = typeof markData === "object" ? (Number(markData.scored) || 0) : (Number(markData) || 0);
@@ -679,14 +679,14 @@ export default function StudentDashboard() {
                     const scoreClass = pct >= 75 ? "text-xl font-bold text-green-400" : pct >= 50 ? "text-xl font-bold text-amber-400" : "text-xl font-bold text-red-400";
                     const barClass = pct >= 75 ? "h-1.5 rounded-full bg-green-500" : pct >= 50 ? "h-1.5 rounded-full bg-amber-500" : "h-1.5 rounded-full bg-red-500";
                     return (
-                      <div key={subject} className="bg-gray-800 rounded-xl p-3">
-                        <p className="text-gray-400 text-xs mb-2 truncate">{subject}</p>
+                      <div key={subject} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3">
+                        <p className="text-[var(--color-text-secondary)] text-xs mb-2 truncate">{subject}</p>
                         <p className={scoreClass}>
                           {scored}
-                          <span className="text-gray-600 text-xs">/{total}</span>
+                          <span className="text-[var(--color-text-muted)] text-xs">/{total}</span>
                         </p>
-                        <p className="text-gray-500 text-xs mt-0.5">{pct}%</p>
-                        <div className="mt-2 bg-gray-700 rounded-full h-1.5">
+                        <p className="text-[var(--color-text-muted)] text-xs mt-0.5">{pct}%</p>
+                        <div className="mt-2 bg-[var(--color-border)] rounded-full h-1.5">
                           <div className={barClass} style={{ width: `${Math.min(pct, 100)}%` }} />
                         </div>
                       </div>
@@ -695,22 +695,22 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">My Attendance</h3>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">My Attendance</h3>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {Object.entries(myAttendance).length === 0 && (
-                    <p className="text-gray-600 text-sm col-span-4">No attendance recorded yet.</p>
+                    <p className="text-[var(--color-text-muted)] text-sm col-span-4">No attendance recorded yet.</p>
                   )}
                   {Object.entries(myAttendance).map(([subject, pct]) => {
                     const scoreClass = Number(pct) >= 75 ? "text-xl font-bold text-green-400" : Number(pct) >= 60 ? "text-xl font-bold text-amber-400" : "text-xl font-bold text-red-400";
                     const barClass = Number(pct) >= 75 ? "h-1.5 rounded-full bg-green-500" : Number(pct) >= 60 ? "h-1.5 rounded-full bg-amber-500" : "h-1.5 rounded-full bg-red-500";
                     return (
-                      <div key={subject} className="bg-gray-800 rounded-xl p-3">
-                        <p className="text-gray-400 text-xs mb-2 truncate">{subject}</p>
+                      <div key={subject} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3">
+                        <p className="text-[var(--color-text-secondary)] text-xs mb-2 truncate">{subject}</p>
                         <p className={scoreClass}>
-                          {pct}<span className="text-gray-600 text-xs">%</span>
+                          {pct}<span className="text-[var(--color-text-muted)] text-xs">%</span>
                         </p>
-                        <div className="mt-2 bg-gray-700 rounded-full h-1.5">
+                        <div className="mt-2 bg-[var(--color-border)] rounded-full h-1.5">
                           <div className={barClass} style={{ width: `${Math.min(Number(pct), 100)}%` }} />
                         </div>
                         {Number(pct) < 75 && <p className="text-red-400 text-xs mt-1">Below 75%</p>}
