@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useLMS } from "../context/LMSContext";
+import { useLMS, normalizeSubjectMarks } from "../context/LMSContext";
+import { getStudentMarksFull, getCatalogSubjects } from "../utils/supabase";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import PDFViewer from "../components/PDFViewer";
@@ -13,7 +14,17 @@ const YEARS = [
   { label: "4th Year", sems: ["Sem 7", "Sem 8"] },
 ];
 
+const ALL_SEMS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"];
+
 const DASHBOARD_TABS = ["Overview", "Notes & Subjects", "Placement", "Marks"];
+
+// getStudentMarksFull() expects a year LABEL ("3rd Year") alongside the sem
+// label ("Sem 5") — it does yearNumber()/semNumber() conversion internally.
+// This derives that year label from a sem label using the YEARS map above.
+function getYearForSem(semLabel) {
+  const found = YEARS.find((y) => y.sems.includes(semLabel));
+  return found ? found.label : null;
+}
 
 function SubjectPopup({ subject, sem, notes, assignments, onClose, onOpenPDF }) {
   const [tab, setTab] = useState("Notes");
@@ -165,11 +176,152 @@ function PromotionPopup({ promo, onAcknowledge }) {
   );
 }
 
+// ── MARKS TAB — view-only, Supabase-backed ───────────────────────
+function MyMarksPanel({ marksSem, setMarksSem, userId }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [marksData, setMarksData] = useState({});
+
+  useEffect(() => {
+    if (!userId || !marksSem) return;
+    let cancelled = false;
+
+    async function fetchMarks() {
+      setLoading(true);
+      setError(null);
+      try {
+        const yearLabel = getYearForSem(marksSem);
+        if (!yearLabel) {
+          if (!cancelled) setMarksData({});
+          return;
+        }
+        const data = await getStudentMarksFull(userId, yearLabel, marksSem);
+        if (!cancelled) setMarksData(data || {});
+      } catch (err) {
+        console.error("Failed to fetch marks:", err);
+        if (!cancelled) setError("Could not load marks. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchMarks();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, marksSem]);
+
+  const subjectNames = Object.keys(marksData);
+
+  return (
+    <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+      <div>
+        <h3 className="text-[var(--color-text-primary)] font-semibold mb-1">🏆 My Marks</h3>
+        <p className="text-[var(--color-text-muted)] text-xs">Select a semester to view your internal marks.</p>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 max-w-md">
+        {ALL_SEMS.map((sem) => (
+          <button
+            key={sem}
+            onClick={() => setMarksSem(sem)}
+            className={`px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer
+              ${marksSem === sem
+                ? "bg-[var(--color-accent-solid)] text-white"
+                : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
+          >
+            {sem}
+          </button>
+        ))}
+      </div>
+
+      <div className="pt-2 space-y-3">
+        <h4 className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider">
+          {marksSem} — My Marks
+        </h4>
+
+        {loading && (
+          <p className="text-[var(--color-text-muted)] text-sm">Loading marks…</p>
+        )}
+
+        {!loading && error && (
+          <p className="text-red-400 text-sm">{error}</p>
+        )}
+
+        {!loading && !error && subjectNames.length === 0 && (
+          <p className="text-[var(--color-text-muted)] text-sm">No subjects have been added for {marksSem} yet.</p>
+        )}
+
+        {!loading && !error && subjectNames.map((subject) => {
+          const normalized = normalizeSubjectMarks(marksData[subject]);
+          const enteredKeys = Object.keys(normalized);
+          const hasAnyMarks = enteredKeys.length > 0;
+
+          if (!hasAnyMarks) {
+            return (
+              <div key={subject} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-4 flex items-center justify-between gap-3">
+                <p className="text-[var(--color-text-primary)] text-sm font-medium">{subject}</p>
+                <p className="text-[var(--color-text-muted)] text-xs italic">Marks have not been published for this subject yet.</p>
+              </div>
+            );
+          }
+
+          const cols = enteredKeys.sort();
+          const publishedKeys = enteredKeys.filter((k) => normalized[k]?.published);
+          const totalScored = publishedKeys.reduce((s, k) => s + (Number(normalized[k]?.scored) || 0), 0);
+          const totalMax = publishedKeys.reduce((s, k) => s + (Number(normalized[k]?.total) || 0), 0);
+          const pct = totalMax > 0 ? Math.round((totalScored / totalMax) * 100) : 0;
+
+          return (
+            <div key={subject} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-[var(--color-text-primary)] text-sm font-semibold">{subject}</p>
+                {totalMax > 0 && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                    ${pct >= 75 ? "bg-green-500/20 text-green-400" : pct >= 50 ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"}`}>
+                    {totalScored}/{totalMax} · {pct}%
+                  </span>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      {cols.map((c) => (
+                        <th key={c} className="text-center text-[var(--color-text-secondary)] text-xs py-1.5 px-3 whitespace-nowrap">{c}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {cols.map((c) => {
+                        const cell = normalized[c];
+                        const isPublished = !!cell?.published;
+                        return (
+                          <td key={c} className="text-center py-2 px-3 text-[var(--color-text-primary)] text-sm">
+                            {isPublished
+                              ? `${cell.scored}/${cell.total}`
+                              : <span className="text-[var(--color-text-muted)] text-xs italic">Marks not published yet</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const { user } = useAuth();
   const location = useLocation();
   const {
-    subjects, notes, attendance, marks,
+    notes, attendance, marks,
     assignments, announcements, notices,
     companies, dsaList, placementUploads,
     events, gallery,
@@ -182,15 +334,37 @@ export default function StudentDashboard() {
     return YEARS.find((y) => y.label === user?.year) || YEARS[2];
   });
   const [selectedSem, setSelectedSem]   = useState(user?.sem || "Sem 5");
+  const [marksSem, setMarksSem]         = useState(user?.sem || "Sem 5");
   const [pdfViewer, setPdfViewer]       = useState(null);
   const [subjectPopup, setSubjectPopup] = useState(null);
   const [activePromo, setActivePromo]   = useState(null);
+
+  // ── SUBJECT CATALOG (Supabase — same source Manage Subjects writes
+  // to) — scoped to the student's currently-browsed Year + Semester.
+  // This replaces the old Firebase `subjects[sem]` list so newly
+  // added/edited/removed catalog subjects show up here immediately,
+  // without a separate student-side sync step.
+  const [catalogSubjects, setCatalogSubjects] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCatalogLoading(true);
+    getCatalogSubjects(selectedYear.label, selectedSem).then((subs) => {
+      if (!cancelled) {
+        setCatalogSubjects(subs);
+        setCatalogLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [selectedYear.label, selectedSem]);
 
   useEffect(() => {
     if (user?.sem && user.sem !== selectedSem) {
       const matchedYear = YEARS.find((y) => y.label === user.year);
       if (matchedYear) setSelectedYear(matchedYear);
       setSelectedSem(user.sem);
+      setMarksSem(user.sem);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.sem, user?.year]);
@@ -222,14 +396,17 @@ export default function StudentDashboard() {
       )
     : 0;
 
-  const avgMarks = Object.values(myMarks).length
-    ? (
-        Object.values(myMarks).reduce((acc, m) => {
-          const scored = typeof m === "object" ? (Number(m.scored) || 0) : (Number(m) || 0);
-          const total  = typeof m === "object" ? (Number(m.total) || 100) : 100;
-          return acc + (total > 0 ? (scored / total) * 10 : 0);
-        }, 0) / Object.values(myMarks).length
-      ).toFixed(1)
+  const subjectPctList = Object.values(myMarks).map((subjectData) => {
+    const internalsObj = normalizeSubjectMarks(subjectData);
+    const entries = Object.values(internalsObj);
+    if (entries.length === 0) return 0;
+    const totalScored = entries.reduce((s, v) => s + (Number(v.scored) || 0), 0);
+    const totalMax = entries.reduce((s, v) => s + (Number(v.total) || 100), 0);
+    return totalMax > 0 ? totalScored / totalMax : 0;
+  });
+
+  const avgMarks = subjectPctList.length
+    ? ((subjectPctList.reduce((a, b) => a + b, 0) / subjectPctList.length) * 10).toFixed(1)
     : "0.0";
 
   const myAssignments  = assignments.filter((a) => a.sem === user?.sem);
@@ -467,40 +644,48 @@ export default function StudentDashboard() {
                     );
                   })}
                 </div>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {(subjects[selectedSem] || []).map((subject) => {
-                    const subjectNotesCount = notes.filter(
-                      (n) => n.subject === subject && n.sem === selectedSem
-                    ).length;
-                    const subjectAssignCount = assignments.filter(
-                      (a) => a.subject === subject && a.sem === selectedSem
-                    ).length;
-                    return (
-                      <button key={subject} onClick={() => setSubjectPopup({ subject, sem: selectedSem })} className="bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] hover:border-[var(--color-accent-solid)]/50 rounded-xl p-4 cursor-pointer transition-all group text-left">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-accent-from)]/20 to-[var(--color-accent-to)]/20 flex items-center justify-center text-xl mb-3 group-hover:scale-110 transition-transform"></div>
-                        <p className="text-[var(--color-text-primary)] text-xs font-semibold leading-tight mb-2">{subject}</p>
-                        <p className="text-[var(--color-text-muted)] text-xs">{selectedSem}</p>
-                        <div className="flex gap-2 mt-2">
-                          {subjectNotesCount > 0 && (
-                            <span className="text-xs px-1.5 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-md">{subjectNotesCount}</span>
-                          )}
-                          {subjectAssignCount > 0 && (
-                            <span className="text-xs px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md">{subjectAssignCount}</span>
-                          )}
-                          {subjectNotesCount === 0 && subjectAssignCount === 0 && (
-                            <span className="text-xs text-[var(--color-text-muted)]">Tap to open</span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                  {(subjects[selectedSem] || []).length === 0 && (
-                    <div className="col-span-4 text-center py-8 text-[var(--color-text-muted)]">
-                      <p className="text-sm">No subjects added yet for {selectedSem}</p>
-                      <p className="text-xs mt-1">Faculty will add subjects soon</p>
-                    </div>
-                  )}
-                </div>
+
+                {catalogLoading && (
+                  <p className="text-[var(--color-text-muted)] text-sm py-4">Loading subjects...</p>
+                )}
+
+                {!catalogLoading && (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {catalogSubjects.map((s) => {
+                      const subjectName = s.subject_name;
+                      const subjectNotesCount = notes.filter(
+                        (n) => n.subject === subjectName && n.sem === selectedSem
+                      ).length;
+                      const subjectAssignCount = assignments.filter(
+                        (a) => a.subject === subjectName && a.sem === selectedSem
+                      ).length;
+                      return (
+                        <button key={s.id} onClick={() => setSubjectPopup({ subject: subjectName, sem: selectedSem })} className="bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] hover:border-[var(--color-accent-solid)]/50 rounded-xl p-4 cursor-pointer transition-all group text-left">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-accent-from)]/20 to-[var(--color-accent-to)]/20 flex items-center justify-center text-xl mb-3 group-hover:scale-110 transition-transform"></div>
+                          <p className="text-[var(--color-text-primary)] text-xs font-semibold leading-tight mb-2">{subjectName}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs">{selectedSem}</p>
+                          <div className="flex gap-2 mt-2">
+                            {subjectNotesCount > 0 && (
+                              <span className="text-xs px-1.5 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-md">{subjectNotesCount}</span>
+                            )}
+                            {subjectAssignCount > 0 && (
+                              <span className="text-xs px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md">{subjectAssignCount}</span>
+                            )}
+                            {subjectNotesCount === 0 && subjectAssignCount === 0 && (
+                              <span className="text-xs text-[var(--color-text-muted)]">Tap to open</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {catalogSubjects.length === 0 && (
+                      <div className="col-span-4 text-center py-8 text-[var(--color-text-muted)]">
+                        <p className="text-sm">No subjects added yet for {selectedSem}</p>
+                        <p className="text-xs mt-1">Faculty will add subjects soon</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
@@ -666,34 +851,11 @@ export default function StudentDashboard() {
 
           {activeTab === "Marks" && (
             <div className="space-y-4">
-              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
-                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">My Marks</h3>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {Object.entries(myMarks).length === 0 && (
-                    <p className="text-[var(--color-text-muted)] text-sm col-span-4">No marks recorded yet.</p>
-                  )}
-                  {Object.entries(myMarks).map(([subject, markData]) => {
-                    const scored = typeof markData === "object" ? (Number(markData.scored) || 0) : (Number(markData) || 0);
-                    const total  = typeof markData === "object" ? (Number(markData.total) || 100) : 100;
-                    const pct    = total > 0 ? Math.round((scored / total) * 100) : 0;
-                    const scoreClass = pct >= 75 ? "text-xl font-bold text-green-400" : pct >= 50 ? "text-xl font-bold text-amber-400" : "text-xl font-bold text-red-400";
-                    const barClass = pct >= 75 ? "h-1.5 rounded-full bg-green-500" : pct >= 50 ? "h-1.5 rounded-full bg-amber-500" : "h-1.5 rounded-full bg-red-500";
-                    return (
-                      <div key={subject} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3">
-                        <p className="text-[var(--color-text-secondary)] text-xs mb-2 truncate">{subject}</p>
-                        <p className={scoreClass}>
-                          {scored}
-                          <span className="text-[var(--color-text-muted)] text-xs">/{total}</span>
-                        </p>
-                        <p className="text-[var(--color-text-muted)] text-xs mt-0.5">{pct}%</p>
-                        <div className="mt-2 bg-[var(--color-border)] rounded-full h-1.5">
-                          <div className={barClass} style={{ width: `${Math.min(pct, 100)}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <MyMarksPanel
+                marksSem={marksSem}
+                setMarksSem={setMarksSem}
+                userId={user?.id}
+              />
 
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                 <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">My Attendance</h3>

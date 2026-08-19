@@ -18,10 +18,9 @@ const NAV_ITEMS = {
   ],
   faculty: [
     { icon: "🏠", label: "Dashboard",       path: "/faculty" },
-    { icon: "📚", label: "Manage Subjects", path: "/faculty" },
+    { icon: "📚", label: "My Subjects",     path: "/faculty" },
     { icon: "📤", label: "Upload Notes",    path: "/faculty" },
     { icon: "📅", label: "Attendance",      path: "/faculty" },
-    { icon: "🏆", label: "Mark Sheets",     path: "/faculty" },
     { icon: "📝", label: "Assignments",     path: "/faculty" },
     { icon: "📣", label: "Events",          path: "/events" },
     { icon: "📸", label: "Gallery",         path: "/gallery" },

@@ -14,7 +14,7 @@ const ROLE_LABELS = {
   admin: "Admin",
 };
 
-const SECTIONS = ["Account & Profile", "Appearance", "Help & Support"];
+const SECTIONS = ["Account & Profile", "Appearance", "Help & Support", "Danger Zone"];
 
 // ── Reusable input ────────────────────────────────────────────
 function Field({ label, type = "text", value, onChange, placeholder, disabled }) {
@@ -320,9 +320,106 @@ function HelpSection() {
   );
 }
 
+// ── Danger Zone section ─────────────────────────────────────────
+function DangerZoneSection({ clearAccountData }) {
+  const [showModal, setShowModal]     = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [status, setStatus]           = useState("idle"); // idle | working | success | error
+
+  const canConfirm = confirmText === "CLEAR" && status !== "working";
+
+  const openModal = () => { setConfirmText(""); setStatus("idle"); setShowModal(true); };
+
+  const handleClear = async () => {
+    if (!canConfirm) return;
+    setStatus("working");
+    const result = await clearAccountData();
+    setStatus(result.success ? "success" : "error");
+  };
+
+  return (
+    <>
+      <div className="bg-[var(--color-bg-surface)] border border-red-500/30 rounded-2xl p-5 space-y-3">
+        <h3 className="text-red-500 font-semibold">⚠️ Danger Zone</h3>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[var(--color-text-primary)] text-sm font-medium">Clear Account Data</p>
+            <p className="text-[var(--color-text-muted)] text-xs mt-0.5">
+              Permanently remove your application data from this account. This action cannot be undone.
+            </p>
+          </div>
+          <button onClick={openModal}
+            className="px-4 py-2.5 bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500/20 rounded-xl text-sm font-semibold cursor-pointer transition-all flex-shrink-0">
+            Clear Account Data
+          </button>
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 max-w-md w-full space-y-4">
+            {status === "success" ? (
+              <>
+                <h3 className="text-[var(--color-text-primary)] font-semibold text-lg">Account Data Cleared</h3>
+                <p className="text-[var(--color-text-secondary)] text-sm">
+                  Your application data has been successfully removed from Firestore and Supabase.
+                  Your login account remains active — you'll be signed out now; log back in to see a fresh account.
+                </p>
+                <button onClick={() => setShowModal(false)}
+                  className="w-full px-4 py-2.5 bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] text-white rounded-xl text-sm font-semibold cursor-pointer">
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-red-500 font-semibold text-lg">Clear Account Data?</h3>
+                <p className="text-[var(--color-text-secondary)] text-sm">
+                  This will permanently delete your application data from Firestore and Supabase.
+                  This action cannot be undone.
+                </p>
+
+                {status === "error" && (
+                  <div className="rounded-xl px-4 py-3 text-sm border bg-red-500/10 border-red-500/30 text-red-500">
+                    Some account data could not be cleared. Please try again.
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[var(--color-text-muted)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
+                    Type CLEAR to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    disabled={status === "working"}
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none focus:border-red-500 text-sm"
+                    placeholder="CLEAR"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button onClick={() => setShowModal(false)} disabled={status === "working"}
+                    className="flex-1 px-4 py-2.5 bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] rounded-xl text-sm font-semibold cursor-pointer disabled:opacity-50">
+                    Cancel
+                  </button>
+                  <button onClick={handleClear} disabled={!canConfirm}
+                    className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold cursor-pointer">
+                    {status === "working" ? "Clearing Account Data..." : "Clear My Data"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Main Settings page ────────────────────────────────────────
 export default function Settings() {
-  const { user, updateUserProfile, changePassword } = useAuth();
+  const { user, updateUserProfile, changePassword, clearAccountData } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("Account & Profile");
 
@@ -360,6 +457,9 @@ export default function Settings() {
           )}
           {activeSection === "Appearance" && <AppearanceSection />}
           {activeSection === "Help & Support" && <HelpSection />}
+          {activeSection === "Danger Zone" && (
+            <DangerZoneSection clearAccountData={clearAccountData} />
+          )}
         </main>
       </div>
     </div>

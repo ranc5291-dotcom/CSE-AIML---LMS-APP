@@ -40,6 +40,26 @@ async function uploadToCloudinary(file) {
   };
 }
 
+// ── Marks helpers (exported — usable from any component) ──────
+// Old marks docs stored a subject as a flat { scored, total } object.
+// New docs store a subject as { "Internal 1": {scored,total}, "Internal 2": {...} }.
+// This normalizes either shape into the new nested shape so every screen
+// can read marks the same way regardless of when they were written.
+export function normalizeSubjectMarks(subjectData) {
+  if (!subjectData || typeof subjectData !== "object") return {};
+  if ("scored" in subjectData || "total" in subjectData) {
+    return { "Internal 1": { scored: subjectData.scored ?? "", total: subjectData.total ?? 100 } };
+  }
+  return subjectData;
+}
+
+// How many internals a subject has been configured with (default 1, which
+// keeps old subjects/behavior identical — a single "Marks" column).
+export function getInternalCount(internals, sem, subject) {
+  const n = internals?.[sem]?.[subject];
+  return n && n > 0 ? n : 1;
+}
+
 export function LMSProvider({ children }) {
   const [subjects, setSubjects]           = useState(INITIAL_SUBJECTS);
   const [notes, setNotes]                 = useState([]);
@@ -47,6 +67,8 @@ export function LMSProvider({ children }) {
   const [assignments, setAssignments]     = useState([]);
   const [attendance, setAttendance]       = useState({});
   const [marks, setMarks]                 = useState({});
+  const [internals, setInternals]         = useState({}); // { [sem]: { [subject]: count } }
+  const [markSheetUploads, setMarkSheetUploads] = useState([]); // raw excel files (unparsed)
   const [events, setEvents]               = useState([]);
   const [notices, setNotices]             = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -116,6 +138,9 @@ export function LMSProvider({ children }) {
     // Placement uploads
     listen("placementUploads", setPlacementUploads, []);
 
+    // Mark sheet uploads — raw excel files faculty just want stored, unparsed
+    listen("markSheetUploads", setMarkSheetUploads, []);
+
     // Promotions — real-time, so students see the popup as soon as admin promotes them
     listen("promotions", setPromotions, []);
 
@@ -142,7 +167,23 @@ export function LMSProvider({ children }) {
       unsubs.push(unsub);
     } catch {}
 
-    // Marks from Firestore
+    // Subject internals config — how many internals each subject has
+    try {
+      const unsub = onSnapshot(collection(db, "subjectInternals"),
+        (snap) => {
+          const rebuilt = {};
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            rebuilt[data.sem] = data.internals || {};
+          });
+          setInternals((p) => ({ ...p, ...rebuilt }));
+        },
+        (err) => console.warn("subjectInternals:", err.message)
+      );
+      unsubs.push(unsub);
+    } catch {}
+
+    // Marks from Firestore (official, faculty-entered)
     try {
       const unsub = onSnapshot(collection(db, "marks"),
         (snap) => {
@@ -210,17 +251,30 @@ export function LMSProvider({ children }) {
     } catch (e) { console.warn("removeSubject:", e.message); }
   };
 
+  // ── SUBJECT INTERNALS — how many internals (Internal 1, Internal 2, ...)
+  // a subject has. Faculty sets this; Mark Sheets/Excel/self-marks all read
+  // it. Default is 1 (a single "Marks" column) so existing subjects are
+  // unaffected until a faculty member explicitly changes the count.
+  const setSubjectInternals = async (sem, subject, count) => {
+    setInternals((p) => ({
+      ...p,
+      [sem]: { ...(p[sem] || {}), [subject]: count },
+    }));
+    try {
+      const { setDoc: sd } = await import("firebase/firestore");
+      await sd(
+        doc(db, "subjectInternals", sem),
+        { sem, internals: { [subject]: count }, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+    } catch (e) { console.warn("setSubjectInternals:", e.message); }
+  };
+
   // ── NOTES — Cloudinary + Firestore ───────────────────────────
-  // IMPORTANT: no blob-URL fallback here anymore. A blob: URL only exists in
-  // the uploader's own browser tab's memory — it goes dead the instant the
-  // page reloads or a new session starts. That's exactly why old notes
-  // "wouldn't open" — they were saved with URLs that were never valid for
-  // anyone but the original uploader, in that one session. If Cloudinary
-  // fails now, the upload fails loudly instead of silently saving a broken link.
   const addNote = async (noteData, file) => {
     let fileUrl = null, fileName = noteData.file || "", fileSize = noteData.size || "";
     if (file) {
-      const up = await uploadToCloudinary(file); // throws on failure — caller sees the real error
+      const up = await uploadToCloudinary(file);
       fileUrl = up.fileUrl; fileName = up.fileName; fileSize = up.fileSize;
     }
     await addDoc(collection(db, "notes"), {
@@ -247,7 +301,7 @@ export function LMSProvider({ children }) {
   const addGalleryPhoto = async (photoData, file) => {
     let fileUrl = photoData.url || null;
     if (file) {
-      fileUrl = (await uploadToCloudinary(file)).fileUrl; // throws on failure — no more blob fallback
+      fileUrl = (await uploadToCloudinary(file)).fileUrl;
     }
 
     const dateStr = new Date().toLocaleDateString();
@@ -332,32 +386,120 @@ export function LMSProvider({ children }) {
     } catch { try { await attendanceAPI.update(studentId, studentName, subject, sem, value); } catch {} }
   };
 
-  // ── MARKS ─────────────────────────────────────────────────────
-  const updateMark = async (studentId, subject, scored, total = 100, studentName = "", sem = "") => {
+  // ── MARKS (official, faculty-entered) ────────────────────────
+  // Every subject can have one or more "internals" (Internal 1, Internal 2,
+  // ...), configured per subject via setSubjectInternals. Marks are stored
+  // as marks.{subject}.{internalLabel} = {scored,total}. A single setDoc
+  // with {merge:true} writes straight to the doc keyed by studentId — no
+  // read, no race, and Firestore deep-merges nested map fields so other
+  // subjects/internals on the same doc are left untouched.
+  const updateMark = async (studentId, subject, internalLabel, scored, total = 100, studentName = "", sem = "") => {
     setMarks((p) => ({
       ...p,
-      [studentId]: { ...(p[studentId] || {}), [subject]: { scored, total } },
+      [studentId]: {
+        ...(p[studentId] || {}),
+        [subject]: { ...(p[studentId]?.[subject] || {}), [internalLabel]: { scored, total } },
+      },
     }));
     try {
-      const { getDocs, query: q2, where, setDoc: sd, updateDoc: upd } = await import("firebase/firestore");
-      const snap = await getDocs(q2(collection(db, "marks"), where("studentId", "==", studentId)));
-      if (snap.empty) {
-        await sd(doc(db, "marks", studentId), {
+      const { setDoc: sd } = await import("firebase/firestore");
+      await sd(
+        doc(db, "marks", studentId),
+        {
           studentId, studentName, sem,
-          marks: { [subject]: { scored, total } },
+          marks: { [subject]: { [internalLabel]: { scored, total } } },
           updatedAt: serverTimestamp(),
-        });
-      } else {
-        await upd(snap.docs[0].ref, {
-          [`marks.${subject}`]: { scored, total },
-          updatedAt: serverTimestamp(),
-        });
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn("updateMark:", e.message);
+      try { await marksAPI.update(studentId, studentName, subject, sem, scored); } catch {}
+    }
+  };
+
+  // ── BULK MARKS UPLOAD (Excel import) ─────────────────────────
+  // rows: array of { studentId, studentName, subject, internal, scored, total }
+  // "internal" defaults to "Internal 1" if not supplied. Groups rows by
+  // studentId so each student gets ONE merged write, instead of one write
+  // per cell in the sheet.
+  const updateMarksBulk = async (rows, sem = "") => {
+    const grouped = {};
+    rows.forEach((r) => {
+      if (!r.studentId || !r.subject) return;
+      const internalLabel = r.internal || "Internal 1";
+      if (!grouped[r.studentId]) {
+        grouped[r.studentId] = { studentName: r.studentName || "", marks: {} };
       }
-    } catch { try { await marksAPI.update(studentId, studentName, subject, sem, scored); } catch {} }
+      if (!grouped[r.studentId].marks[r.subject]) {
+        grouped[r.studentId].marks[r.subject] = {};
+      }
+      grouped[r.studentId].marks[r.subject][internalLabel] = {
+        scored: Number(r.scored) || 0,
+        total: Number(r.total) || 100,
+      };
+    });
+
+    // Optimistic local update
+    setMarks((p) => {
+      const next = { ...p };
+      Object.entries(grouped).forEach(([studentId, g]) => {
+        const prevSubjects = next[studentId] || {};
+        const mergedSubjects = { ...prevSubjects };
+        Object.entries(g.marks).forEach(([subject, internalsData]) => {
+          mergedSubjects[subject] = { ...(prevSubjects[subject] || {}), ...internalsData };
+        });
+        next[studentId] = mergedSubjects;
+      });
+      return next;
+    });
+
+    const { setDoc: sd } = await import("firebase/firestore");
+    const results = await Promise.allSettled(
+      Object.entries(grouped).map(([studentId, g]) =>
+        sd(
+          doc(db, "marks", studentId),
+          {
+            studentId,
+            studentName: g.studentName,
+            sem,
+            marks: g.marks,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        )
+      )
+    );
+
+    const failed = results.filter((r) => r.status === "rejected").length;
+    return { total: Object.keys(grouped).length, failed };
+  };
+
+  // ── MARK SHEET UPLOADS — raw excel/csv files faculty just want stored
+  // and downloadable, exactly like a Notes upload. Never parsed, never
+  // touches the "marks" collection above.
+  const addMarkSheetUpload = async (data, file) => {
+    let fileUrl = null, fileName = data.file || "", fileSize = data.size || "";
+    if (file) {
+      const up = await uploadToCloudinary(file);
+      fileUrl = up.fileUrl; fileName = up.fileName; fileSize = up.fileSize;
+    }
+    await addDoc(collection(db, "markSheetUploads"), {
+      sem: data.sem,
+      uploadedBy: data.uploadedBy,
+      file: fileName,
+      fileUrl,
+      size: fileSize,
+      createdAt: serverTimestamp(),
+      date: new Date().toLocaleDateString(),
+    });
+  };
+  const removeMarkSheetUpload = async (id) => {
+    try { await deleteDoc(doc(db, "markSheetUploads", String(id))); } catch {}
+    setMarkSheetUploads((p) => p.filter((m) => m.id !== id));
   };
 
   // ── ASSIGNMENTS ───────────────────────────────────────────────
-  // No blob fallback — same reasoning as addNote above.
   const addAssignment = async (data, file = null) => {
     let fileUrl = null, fileName = null;
     if (file) {
@@ -500,10 +642,12 @@ export function LMSProvider({ children }) {
   return (
     <LMSContext.Provider value={{
       subjects, addSubject, removeSubject,
+      internals, setSubjectInternals,
       notes, addNote, removeNote, notesLoading,
       assignments, addAssignment, removeAssignment,
       attendance, updateAttendance,
-      marks, updateMark,
+      marks, updateMark, updateMarksBulk,
+      markSheetUploads, addMarkSheetUpload, removeMarkSheetUpload,
       events, addEvent, removeEvent, joinEvent,
       notices, addNotice, removeNotice,
       announcements, addAnnouncement, removeAnnouncement,

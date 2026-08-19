@@ -7,8 +7,10 @@ import {
   firebaseLogout,
   onAuthChange,
 } from "../utils/firebase";
-import { supabase, logLogin } from "../utils/supabase";
+import { supabase, logLogin, clearSupabaseUserData } from "../utils/supabase";
 import { removeFCMToken } from "../utils/firebaseMessaging";
+import { clearFirestoreUserData } from "../utils/clearAccountData";
+
 
 const AuthContext = createContext(null);
 
@@ -372,6 +374,27 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
+  // ── CLEAR ACCOUNT DATA (wipes Firestore + Supabase data for this user) ──
+  // NOTE: this must live INSIDE AuthProvider — it was previously declared
+  // after the component's closing brace, so `user` and `logout` were out
+  // of scope and it threw "user is not defined" as soon as the module
+  // evaluated (or on first call).
+  const clearAccountData = useCallback(async () => {
+    if (!user?.id) return { success: false, error: "No authenticated user." };
+    const uid = user.id, role = user.role;
+    const result = { firestore: { ok: true }, supabase: { ok: true } };
+
+    try { await clearFirestoreUserData(uid); }
+    catch (err) { result.firestore = { ok: false, error: err.message }; }
+
+    try { await clearSupabaseUserData(uid, role); }
+    catch (err) { result.supabase = { ok: false, error: err.message }; }
+
+    const success = result.firestore.ok && result.supabase.ok;
+    if (success) { try { await logout(); } catch {} } // force a clean reload
+    return { success, details: result };
+  }, [user, logout]);
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -387,6 +410,7 @@ export function AuthProvider({ children }) {
       removeStudent,
       getLoginLog,
       updateUserProfile,
+      clearAccountData,
       enrolledVersion,
     }}>
       {children}
