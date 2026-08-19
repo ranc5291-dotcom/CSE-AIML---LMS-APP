@@ -623,3 +623,83 @@ export async function setUserRoles(userId, roles) {
     return { success: false, error: err.message };
   }
 }
+// ══════════════════════════════════════════════════════════
+// FUNDS — Available Fund = SUM(fund_transactions.amount).
+// Paste these into src/utils/supabase.js
+// ══════════════════════════════════════════════════════════
+
+export async function getFundTransactions() {
+  const { data, error } = await supabase
+    .from("fund_transactions")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) { console.warn("getFundTransactions:", error.message); return []; }
+  return data || [];
+}
+
+// type: "credit" | "debit". Amount is always entered as a positive number
+// by the admin; we flip the sign here for debits.
+export async function addFundTransaction({ title, amount, type, createdBy }) {
+  const signedAmount = type === "debit" ? -Math.abs(Number(amount)) : Math.abs(Number(amount));
+  const { data, error } = await supabase
+    .from("fund_transactions")
+    .insert({ title, amount: signedAmount, created_by: createdBy })
+    .select()
+    .single();
+  if (error) { console.warn("addFundTransaction:", error.message); return { ok: false, error: error.message }; }
+  return { ok: true, data };
+}
+
+export async function getFundPaymentRequests() {
+  const { data, error } = await supabase
+    .from("fund_payment_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) { console.warn("getFundPaymentRequests:", error.message); return []; }
+  return data || [];
+}
+
+export async function addFundPaymentRequest({ studentId, studentName, amount, transactionRef, proofFile }) {
+  let proof_url = null;
+  if (proofFile) {
+    const safeName = `proof_${Date.now()}_${proofFile.name.replace(/\s+/g, "_")}`;
+    const { error: uploadError } = await supabase.storage.from("funds").upload(safeName, proofFile);
+    if (!uploadError) {
+      proof_url = supabase.storage.from("funds").getPublicUrl(safeName).data.publicUrl;
+    } else {
+      console.warn("payment proof upload failed:", uploadError.message);
+    }
+  }
+  const { error } = await supabase.from("fund_payment_requests").insert({
+    student_id: studentId,
+    student_name: studentName,
+    amount: Number(amount),
+    transaction_ref: transactionRef || null,
+    proof_url,
+  });
+  if (error) { console.warn("addFundPaymentRequest:", error.message); return { ok: false, error: error.message }; }
+  return { ok: true };
+}
+
+export async function updateFundPaymentRequestStatus(id, status) {
+  const { error } = await supabase.from("fund_payment_requests").update({ status }).eq("id", id);
+  if (error) { console.warn("updateFundPaymentRequestStatus:", error.message); return { ok: false, error: error.message }; }
+  return { ok: true };
+}
+
+export async function getFundQR() {
+  const { data, error } = await supabase.from("fund_qr").select("*").eq("id", 1).maybeSingle();
+  if (error) { console.warn("getFundQR:", error.message); return null; }
+  return data;
+}
+
+// Faculty or Admin only (enforced client-side, matching the rest of this app).
+export async function updateFundQR(file, updatedBy) {
+  const safeName = `qr_${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
+  const { error: uploadError } = await supabase.storage.from("funds").upload(safeName, file);
+  if (uploadError) { console.warn("updateFundQR upload:", uploadError.message); return { ok: false, error: uploadError.message }; }
+  const qr_url = supabase.storage.from("funds").getPublicUrl(safeName).data.publicUrl;
+  const { error } = await supabase.from("fund_qr").update({ qr_url, updated_by: updatedBy, updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) { console.warn("updateFundQR db:", error.message); return { ok: false, error: error.message }; }
+  return { ok: true, qr_url };
+}

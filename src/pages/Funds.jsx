@@ -1,67 +1,111 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
-import { useLMS } from "../context/LMSContext";
+import {
+  getFundTransactions, addFundTransaction,
+  getFundPaymentRequests, addFundPaymentRequest, updateFundPaymentRequestStatus,
+  getFundQR, updateFundQR,
+} from "../utils/supabase";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 
-const INITIAL_TRANSACTIONS = [
-  { id: 1, desc: "Lab Equipment Purchase", amount: -45000, date: "2026-05-15", by: "Admin" },
-  { id: 2, desc: "Alumni Donation", amount: 50000, date: "2026-05-01", by: "Alumni" },
-];
-
 export default function Funds() {
   const { user } = useAuth();
-  const { fundRequests, addFundRequest, removeFundRequest } = useLMS();
+  // activeRole reflects whichever dashboard a multi-role user is currently
+  // on (set by AuthContext.setActiveRole) — falls back to their primary
+  // role for single-role users.
+  const role = user?.activeRole || user?.role;
+  const isAdmin   = role === "admin";
+  const isFaculty = role === "faculty";
+  const canManageFund = isAdmin;                 // add credit/debit
+  const canManageQR    = isAdmin || isFaculty;    // upload/change QR
 
-  const isAdmin  = user?.role === "admin" || user?.role === "faculty";
-  const [mobileOpen, setMobileOpen]     = useState(false);
-  const [activeTab, setActiveTab]       = useState("Overview");
-  const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
-  const [qrImage, setQrImage]           = useState(null);
-  const qrRef                           = useRef(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeTab, setActiveTab]   = useState("Overview");
 
-  // Fund request form
-  const [showReqForm, setShowReqForm]   = useState(false);
-  const [reqForm, setReqForm]           = useState({
-    hostName: "", reason: "", totalAmount: "", totalStudents: "",
-  });
+  const [transactions, setTransactions] = useState([]);
+  const [requests, setRequests]         = useState([]);
+  const [qr, setQr]                     = useState(null);
+  const [loading, setLoading]           = useState(true);
 
-  // Transaction form
-  const [showTxForm, setShowTxForm]     = useState(false);
-  const [newTx, setNewTx]               = useState({ desc: "", amount: "", type: "credit" });
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    const [tx, reqs, qrRow] = await Promise.all([
+      getFundTransactions(),
+      getFundPaymentRequests(),
+      getFundQR(),
+    ]);
+    setTransactions(tx);
+    setRequests(reqs);
+    setQr(qrRow);
+    setLoading(false);
+  }, []);
 
-  const totalFund = transactions.reduce((sum, t) => sum + t.amount, 0);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
-  const handleAddRequest = () => {
-    const { hostName, reason, totalAmount, totalStudents } = reqForm;
-    if (!hostName || !reason || !totalAmount || !totalStudents) {
-      alert("All fields are required."); return;
-    }
-    const total = Number(totalAmount);
-    const count = Number(totalStudents);
-    addFundRequest({
-      hostName,
-      reason,
-      totalAmount: total,
-      perPerson: count > 0 ? Math.ceil(total / count) : total,
-      totalStudents: count,
+  const totalCredits = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + Number(t.amount), 0);
+  const totalDebits  = Math.abs(transactions.filter((t) => t.amount < 0).reduce((s, t) => s + Number(t.amount), 0));
+  const availableFund = totalCredits - totalDebits; // Available Fund = Total Credits - Total Debits
+
+  // ── Add Credit / Debit (Admin) ──
+  const [showTxForm, setShowTxForm] = useState(false);
+  const [newTx, setNewTx]           = useState({ title: "", amount: "", type: "credit" });
+  const [txSaving, setTxSaving]     = useState(false);
+
+  const handleAddTx = async () => {
+    if (!newTx.title || !newTx.amount) return;
+    setTxSaving(true);
+    const res = await addFundTransaction({
+      title: newTx.title, amount: newTx.amount, type: newTx.type, createdBy: user?.id,
     });
-    setReqForm({ hostName: "", reason: "", totalAmount: "", totalStudents: "" });
-    setShowReqForm(false);
+    setTxSaving(false);
+    if (!res.ok) { alert("Failed to save: " + res.error); return; }
+    setNewTx({ title: "", amount: "", type: "credit" });
+    setShowTxForm(false);
+    loadAll();
   };
 
-  const handleAddTx = () => {
-    if (!newTx.desc || !newTx.amount) return;
-    const amount = newTx.type === "credit"
-      ? Math.abs(Number(newTx.amount))
-      : -Math.abs(Number(newTx.amount));
-    setTransactions((prev) => [{
-      id: Date.now(), desc: newTx.desc, amount,
-      date: new Date().toISOString().split("T")[0],
-      by: user?.name,
-    }, ...prev]);
-    setNewTx({ desc: "", amount: "", type: "credit" });
-    setShowTxForm(false);
+  // ── Payment Requests (Student submits, Admin/Faculty view+approve) ──
+  const [payAmount, setPayAmount] = useState("");
+  const [payRef, setPayRef]       = useState("");
+  const [payProof, setPayProof]   = useState(null);
+  const [paySaving, setPaySaving] = useState(false);
+  const [paySuccess, setPaySuccess] = useState("");
+
+  const handleSubmitPayment = async () => {
+    if (!payAmount) { alert("Enter the amount you paid."); return; }
+    setPaySaving(true);
+    const res = await addFundPaymentRequest({
+      studentId: user?.id, studentName: user?.name,
+      amount: payAmount, transactionRef: payRef, proofFile: payProof,
+    });
+    setPaySaving(false);
+    if (!res.ok) { alert("Failed to submit: " + res.error); return; }
+    setPayAmount(""); setPayRef(""); setPayProof(null);
+    setPaySuccess("✅ Payment submitted. Admin/Faculty will verify it shortly.");
+    setTimeout(() => setPaySuccess(""), 4000);
+    loadAll();
+  };
+
+  const handleUpdateStatus = async (id, status) => {
+    const res = await updateFundPaymentRequestStatus(id, status);
+    if (!res.ok) { alert("Failed: " + res.error); return; }
+    loadAll();
+  };
+
+  const myRequests = requests.filter((r) => r.student_id === user?.id);
+  const visibleRequests = role === "student" ? myRequests : requests;
+
+  // ── QR management (Admin/Faculty) ──
+  const [qrUploading, setQrUploading] = useState(false);
+
+  const handleUploadQR = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setQrUploading(true);
+    const res = await updateFundQR(file, user?.id);
+    setQrUploading(false);
+    if (!res.ok) { alert("QR upload failed: " + res.error); return; }
+    loadAll();
   };
 
   return (
@@ -74,8 +118,8 @@ export default function Funds() {
           <div className="bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] rounded-2xl p-5 text-white">
             <p className="text-white/80 text-sm mb-1">Branch Fund Management 💰</p>
             <h2 className="text-2xl font-bold">Total Available Fund</h2>
-            <p className={`text-4xl font-bold mt-2 ${totalFund >= 0 ? "text-white" : "text-red-300"}`}>
-              ₹{Math.abs(totalFund).toLocaleString()}
+            <p className={`text-4xl font-bold mt-2 ${availableFund >= 0 ? "text-white" : "text-red-300"}`}>
+              ₹{Math.abs(availableFund).toLocaleString()}
             </p>
           </div>
 
@@ -92,25 +136,23 @@ export default function Funds() {
             ))}
           </div>
 
+          {loading && <p className="text-[var(--color-text-muted)] text-sm">Loading fund data…</p>}
+
           {/* ── OVERVIEW ── */}
-          {activeTab === "Overview" && (
+          {!loading && activeTab === "Overview" && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4">
                   <p className="text-green-400 text-xs mb-1">Total Credits</p>
-                  <p className="text-green-400 font-bold text-2xl">
-                    ₹{transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0).toLocaleString()}
-                  </p>
+                  <p className="text-green-400 font-bold text-2xl">₹{totalCredits.toLocaleString()}</p>
                 </div>
                 <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
                   <p className="text-red-400 text-xs mb-1">Total Debits</p>
-                  <p className="text-red-400 font-bold text-2xl">
-                    ₹{Math.abs(transactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0)).toLocaleString()}
-                  </p>
+                  <p className="text-red-400 font-bold text-2xl">₹{totalDebits.toLocaleString()}</p>
                 </div>
               </div>
 
-              {isAdmin && (
+              {canManageFund && (
                 <div className="flex justify-end">
                   <button onClick={() => setShowTxForm(!showTxForm)}
                     className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all">
@@ -119,10 +161,10 @@ export default function Funds() {
                 </div>
               )}
 
-              {showTxForm && isAdmin && (
+              {showTxForm && canManageFund && (
                 <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 space-y-3">
-                  <input value={newTx.desc} onChange={(e) => setNewTx({ ...newTx, desc: e.target.value })}
-                    placeholder="Description..."
+                  <input value={newTx.title} onChange={(e) => setNewTx({ ...newTx, title: e.target.value })}
+                    placeholder="Title (e.g. Alumni Donation)"
                     className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
                   <div className="flex gap-2">
                     <input type="number" value={newTx.amount} onChange={(e) => setNewTx({ ...newTx, amount: e.target.value })}
@@ -134,9 +176,9 @@ export default function Funds() {
                       <option value="debit">− Debit</option>
                     </select>
                   </div>
-                  <button onClick={handleAddTx} disabled={!newTx.desc || !newTx.amount}
+                  <button onClick={handleAddTx} disabled={!newTx.title || !newTx.amount || txSaving}
                     className="w-full py-2 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer">
-                    Add Transaction
+                    {txSaving ? "Saving..." : "Add Transaction"}
                   </button>
                 </div>
               )}
@@ -144,6 +186,9 @@ export default function Funds() {
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                 <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">📋 Transaction History</h3>
                 <div className="space-y-2">
+                  {transactions.length === 0 && (
+                    <p className="text-[var(--color-text-muted)] text-sm">No transactions yet.</p>
+                  )}
                   {transactions.map((t) => (
                     <div key={t.id} className="flex items-center justify-between bg-[var(--color-bg-surface-alt)] rounded-xl px-4 py-3 border border-[var(--color-border)]">
                       <div className="flex items-center gap-3">
@@ -152,8 +197,8 @@ export default function Funds() {
                           {t.amount > 0 ? "💚" : "🔴"}
                         </div>
                         <div>
-                          <p className="text-[var(--color-text-primary)] text-xs font-medium">{t.desc}</p>
-                          <p className="text-[var(--color-text-muted)] text-xs">{t.date} · {t.by}</p>
+                          <p className="text-[var(--color-text-primary)] text-xs font-medium">{t.title}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs">{new Date(t.created_at).toLocaleDateString()}</p>
                         </div>
                       </div>
                       <span className={`font-bold text-sm ${t.amount > 0 ? "text-green-400" : "text-red-400"}`}>
@@ -167,157 +212,105 @@ export default function Funds() {
           )}
 
           {/* ── PAYMENT REQUESTS ── */}
-          {activeTab === "Payment Requests" && (
+          {!loading && activeTab === "Payment Requests" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-[var(--color-text-secondary)] text-sm">Payment requests raised by hosts</p>
-                <button onClick={() => setShowReqForm(!showReqForm)}
-                  className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all">
-                  {showReqForm ? "✕ Cancel" : "+ Raise Request"}
-                </button>
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Payment Requests</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-border)]">
+                        <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4">Student</th>
+                        <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4">Amount</th>
+                        <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4">Status</th>
+                        {(isAdmin || isFaculty) && <th className="text-left text-[var(--color-text-secondary)] text-xs py-2">Action</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleRequests.map((r) => (
+                        <tr key={r.id} className="border-b border-[var(--color-border)]/50">
+                          <td className="py-3 pr-4 text-[var(--color-text-primary)] text-xs">{r.student_name}</td>
+                          <td className="py-3 pr-4 text-[var(--color-text-primary)] text-xs">₹{Number(r.amount).toLocaleString()}</td>
+                          <td className="py-3 pr-4">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                              ${r.status === "Approved" ? "bg-green-500/20 text-green-400" :
+                                r.status === "Rejected" ? "bg-red-500/20 text-red-400" :
+                                "bg-amber-500/20 text-amber-400"}`}>
+                              {r.status}
+                            </span>
+                          </td>
+                          {(isAdmin || isFaculty) && (
+                            <td className="py-3 flex gap-2">
+                              {r.status === "Pending" && (
+                                <>
+                                  <button onClick={() => handleUpdateStatus(r.id, "Approved")}
+                                    className="px-2 py-1 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg text-xs cursor-pointer">Approve</button>
+                                  <button onClick={() => handleUpdateStatus(r.id, "Rejected")}
+                                    className="px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-xs cursor-pointer">Reject</button>
+                                </>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                      {visibleRequests.length === 0 && (
+                        <tr><td colSpan={4} className="py-6 text-center text-[var(--color-text-muted)] text-sm">No payment requests yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-
-              {showReqForm && (
-                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
-                  <h3 className="text-[var(--color-text-primary)] font-semibold">💳 New Payment Request</h3>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Host Name *</label>
-                      <input value={reqForm.hostName}
-                        onChange={(e) => setReqForm({ ...reqForm, hostName: e.target.value })}
-                        placeholder="e.g. Student Council / Dr. Sharma"
-                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
-                    </div>
-                    <div>
-                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Total Amount (₹) *</label>
-                      <input type="number" value={reqForm.totalAmount}
-                        onChange={(e) => setReqForm({ ...reqForm, totalAmount: e.target.value })}
-                        placeholder="e.g. 15000"
-                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Reason for Payment *</label>
-                      <textarea value={reqForm.reason}
-                        onChange={(e) => setReqForm({ ...reqForm, reason: e.target.value })}
-                        placeholder="Describe what the payment is for..."
-                        rows={3}
-                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)] resize-none" />
-                    </div>
-                    <div>
-                      <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">No. of Students *</label>
-                      <input type="number" value={reqForm.totalStudents}
-                        onChange={(e) => setReqForm({ ...reqForm, totalStudents: e.target.value })}
-                        placeholder="e.g. 60"
-                        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
-                    </div>
-                    <div className="flex items-end">
-                      {reqForm.totalAmount && reqForm.totalStudents && Number(reqForm.totalStudents) > 0 && (
-                        <div className="w-full bg-[var(--color-accent-soft-bg)] border border-[var(--color-accent-solid)]/30 rounded-xl px-4 py-2.5">
-                          <p className="text-[var(--color-accent-soft-text)] text-xs">Amount per person</p>
-                          <p className="text-[var(--color-accent-soft-text)] font-bold text-lg">
-                            ₹{Math.ceil(Number(reqForm.totalAmount) / Number(reqForm.totalStudents)).toLocaleString()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <button onClick={handleAddRequest}
-                    className="w-full py-3 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold cursor-pointer transition-all">
-                    Submit Payment Request
-                  </button>
-                </div>
-              )}
-
-              {fundRequests.length === 0 && (
-                <div className="text-center py-12 text-[var(--color-text-muted)]">
-                  <p className="text-4xl mb-2">💳</p>
-                  <p className="text-sm">No payment requests yet.</p>
-                </div>
-              )}
-
-              {fundRequests.map((req) => (
-                <div key={req.id} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-[var(--color-text-muted)] text-xs font-medium uppercase tracking-wider mb-1">Payment Request</p>
-                      <h4 className="text-[var(--color-text-primary)] font-bold text-base">{req.reason}</h4>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2 py-1 rounded-lg font-medium
-                        ${req.status === "Active" ? "bg-green-500/20 text-green-400" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
-                        {req.status}
-                      </span>
-                      {isAdmin && (
-                        <button onClick={() => removeFundRequest(req.id)}
-                          className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer transition-colors">🗑️</button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3 text-center">
-                      <p className="text-[var(--color-text-secondary)] text-xs mb-1">Host</p>
-                      <p className="text-[var(--color-text-primary)] text-xs font-semibold">{req.hostName}</p>
-                    </div>
-                    <div className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3 text-center">
-                      <p className="text-[var(--color-text-secondary)] text-xs mb-1">Total Amount</p>
-                      <p className="text-[var(--color-accent-soft-text)] font-bold text-sm">₹{req.totalAmount.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-[var(--color-accent-soft-bg)] border border-[var(--color-accent-solid)]/20 rounded-xl p-3 text-center">
-                      <p className="text-[var(--color-accent-soft-text)] text-xs mb-1">Per Person</p>
-                      <p className="text-[var(--color-accent-soft-text)] font-bold text-lg">₹{req.perPerson.toLocaleString()}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
-                    <span>👥 {req.totalStudents} students</span>
-                    <span>📅 {req.date}</span>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
 
           {/* ── QR PAYMENT ── */}
-          {activeTab === "QR Payment" && (
+          {!loading && activeTab === "QR Payment" && (
             <div className="space-y-4">
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
-                <h3 className="text-[var(--color-text-primary)] font-semibold">📱 Payment QR Scanner</h3>
-                <p className="text-[var(--color-text-secondary)] text-xs">Scan to pay the branch fund directly</p>
+                <h3 className="text-[var(--color-text-primary)] font-semibold">📱 College Fund Payment</h3>
+                <p className="text-[var(--color-text-secondary)] text-xs">Scan this QR code to make your payment.</p>
 
                 <div className="flex flex-col items-center justify-center bg-[var(--color-bg-surface-alt)] rounded-2xl p-8 border border-[var(--color-border)] min-h-56">
-                  {qrImage ? (
-                    <>
-                      <img src={qrImage} alt="QR Code" className="w-52 h-52 object-contain rounded-xl" />
-                      <p className="text-[var(--color-text-secondary)] text-xs mt-3">Scan this QR to pay branch fund</p>
-                    </>
+                  {qr?.qr_url ? (
+                    <img src={qr.qr_url} alt="QR Code" className="w-52 h-52 object-contain rounded-xl" />
                   ) : (
                     <>
                       <div className="w-32 h-32 bg-[var(--color-bg-hover)] rounded-xl flex items-center justify-center mb-3">
                         <span className="text-5xl">📲</span>
                       </div>
                       <p className="text-[var(--color-text-muted)] text-sm">No QR uploaded yet</p>
-                      {!isAdmin && <p className="text-[var(--color-text-muted)] text-xs mt-1">Admin will upload the payment QR</p>}
+                      {role === "student" && <p className="text-[var(--color-text-muted)] text-xs mt-1">Admin/Faculty will upload the payment QR</p>}
                     </>
                   )}
                 </div>
 
-                {isAdmin && (
+                {canManageQR && (
                   <label className="flex items-center justify-center gap-2 w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium transition-all cursor-pointer">
-                    📤 {qrImage ? "Update QR Code" : "Upload QR Code"}
-                    <input ref={qrRef} type="file" accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = (ev) => setQrImage(ev.target.result);
-                        reader.readAsDataURL(file);
-                      }} className="hidden" />
+                    {qrUploading ? "⏳ Uploading..." : qr?.qr_url ? "📤 Update QR Code" : "📤 Upload QR Code"}
+                    <input type="file" accept="image/*" onChange={handleUploadQR} disabled={qrUploading} className="hidden" />
                   </label>
                 )}
               </div>
+
+              {/* Student payment submission — students only */}
+              {role === "student" && (
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">Submit Your Payment</h3>
+                  <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)}
+                    placeholder="Amount (₹)"
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
+                  <input value={payRef} onChange={(e) => setPayRef(e.target.value)}
+                    placeholder="Transaction ID"
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
+                  <input type="file" accept="image/*" onChange={(e) => setPayProof(e.target.files[0])}
+                    className="w-full text-[var(--color-text-secondary)] text-xs" />
+                  <button onClick={handleSubmitPayment} disabled={!payAmount || paySaving}
+                    className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                    {paySaving ? "Submitting..." : "Submit Payment"}
+                  </button>
+                  {paySuccess && <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm text-center">{paySuccess}</div>}
+                </div>
+              )}
             </div>
           )}
 
