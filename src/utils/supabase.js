@@ -575,3 +575,51 @@ export async function clearSupabaseUserData(uid, role) {
     throw new Error(errors.join(" | "));
   }
 }
+// ══════════════════════════════════════════════════════════
+// USER ROLES — multi-role access (Admin-assigned)
+// ══════════════════════════════════════════════════════════
+
+export async function getUserRoles(userId) {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  if (error) { console.warn("getUserRoles failed", error); return []; }
+  return (data || []).map((r) => r.role);
+}
+
+export async function getAllUserRoles() {
+  const { data, error } = await supabase.from("user_roles").select("*");
+  if (error) { console.warn("getAllUserRoles failed", error); return []; }
+  return data || [];
+}
+
+// Syncs this user's extra roles to exactly the given array (adds missing,
+// removes anything not in the list). Pass the FULL desired role set,
+// including their primary profiles.role if you want it explicit — it's
+// harmless either way since login always merges profiles.role in too.
+export async function setUserRoles(userId, roles) {
+  try {
+    const current = await getUserRoles(userId);
+    const toAdd = roles.filter((r) => !current.includes(r));
+    const toRemove = current.filter((r) => !roles.includes(r));
+
+    if (toAdd.length > 0) {
+      const rows = toAdd.map((role) => ({ user_id: userId, role }));
+      const { error } = await supabase.from("user_roles").insert(rows);
+      if (error) throw error;
+    }
+    if (toRemove.length > 0) {
+      const { error } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .in("role", toRemove);
+      if (error) throw error;
+    }
+    return { success: true };
+  } catch (err) {
+    console.warn("setUserRoles failed", err);
+    return { success: false, error: err.message };
+  }
+}

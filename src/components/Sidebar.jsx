@@ -56,14 +56,37 @@ const ROLE_COLORS = {
   admin:     "from-rose-500 to-red-600",
 };
 
+const ROLE_ROUTES = {
+  student: "/student",
+  faculty: "/faculty",
+  placement: "/placement",
+  admin: "/admin",
+};
+
+const ROLE_ICONS = {
+  student: "🎓",
+  faculty: "👨‍🏫",
+  placement: "💼",
+  admin: "🛡️",
+};
+
+const ROLE_LABELS = {
+  student: "Student",
+  faculty: "Faculty",
+  placement: "Placement",
+  admin: "Admin",
+};
+
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
-  const { user, logout } = useAuth();
+  const { user, logout, setActiveRole } = useAuth();
   const navigate         = useNavigate();
   const location         = useLocation();
 
   const [collapsed, setCollapsed] = useState(false);
 
-  const items = NAV_ITEMS[user?.role] || NAV_ITEMS.student;
+  const currentRole = user?.activeRole || user?.role;
+  const items = NAV_ITEMS[currentRole] || NAV_ITEMS.student;
+  const multiRole = (user?.roles?.length || 0) > 1;
 
   const handleNav = (path, tab) => {
     navigate(path, { state: { tab } });
@@ -75,12 +98,19 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
     navigate("/");
   };
 
-  const roleColor = ROLE_COLORS[user?.role] || ROLE_COLORS.student;
+  const handleSwitchRole = (role) => {
+    if (role === currentRole) return;
+    setActiveRole(role);
+    navigate(ROLE_ROUTES[role] || "/");
+    setMobileOpen && setMobileOpen(false);
+  };
+
+  const roleColor = ROLE_COLORS[currentRole] || ROLE_COLORS.student;
 
   const subLabel =
-    user?.role === "student"
+    currentRole === "student"
       ? (user?.usn || "Student")
-      : user?.role;
+      : currentRole;
 
   return (
     <>
@@ -134,6 +164,31 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             </>
           )}
         </div>
+
+        {/* Dashboard switcher — only shown for multi-role users */}
+        {multiRole && !collapsed && (
+          <div className="px-3 pt-3">
+            <p className="text-[var(--color-text-muted)] text-xs font-semibold px-2 mb-1.5 uppercase tracking-wide">
+              Switch Dashboard
+            </p>
+            <div className="space-y-1">
+              {user.roles.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => handleSwitchRole(r)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-all
+                    ${r === currentRole
+                      ? "bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] text-white shadow-md"
+                      : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)]"
+                    }`}
+                >
+                  <span>{ROLE_ICONS[r] || "🔑"}</span>
+                  {ROLE_LABELS[r] || r}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-1">

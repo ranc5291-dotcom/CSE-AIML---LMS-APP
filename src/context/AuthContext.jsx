@@ -7,7 +7,7 @@ import {
   firebaseLogout,
   onAuthChange,
 } from "../utils/firebase";
-import { supabase, logLogin, clearSupabaseUserData } from "../utils/supabase";
+import { supabase, logLogin, clearSupabaseUserData, getUserRoles, setUserRoles } from "../utils/supabase";
 import { removeFCMToken } from "../utils/firebaseMessaging";
 import { clearFirestoreUserData } from "../utils/clearAccountData";
 
@@ -64,6 +64,19 @@ async function fetchProfileById(uid) {
   return data;
 }
 
+// ── MULTI-ROLE HELPERS ───────────────────────────────────────────
+// Merges the user's primary profiles.role with any extra roles granted
+// via the user_roles table (deduplicated).
+async function resolveRoles(primaryRole, userId) {
+  try {
+    const extra = await getUserRoles(userId);
+    return Array.from(new Set([primaryRole, ...extra].filter(Boolean)));
+  } catch (err) {
+    console.warn("resolveRoles failed, falling back to primary role only", err);
+    return [primaryRole].filter(Boolean);
+  }
+}
+
 // ── PUBLIC GETTERS (used in dashboards) ──────────────────────────
 export async function getAllProfiles() {
   const { data, error } = await supabase.from("profiles").select("*");
@@ -115,7 +128,16 @@ export function AuthProvider({ children }) {
       try {
         const profile = await fetchProfileById(fbUser.uid);
         if (profile) {
-          const sessionUser = { ...profile, uid: fbUser.uid };
+          const roles = await resolveRoles(profile.role, profile.id);
+          // Preserve whichever dashboard they were on, if still authorized.
+          let prevActiveRole;
+          try {
+            const prevSession = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+            prevActiveRole = prevSession?.activeRole;
+          } catch {}
+          const activeRole = roles.includes(prevActiveRole) ? prevActiveRole : profile.role;
+
+          const sessionUser = { ...profile, uid: fbUser.uid, roles, activeRole };
           localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
           setUser(sessionUser);
         }
@@ -126,6 +148,29 @@ export function AuthProvider({ children }) {
     });
     return () => unsubscribe();
   }, []);
+
+  // Refresh roles on session start (covers phone-OTP users, who aren't
+  // rehydrated by the Firebase listener above) and picks up any role
+  // changes an admin made since the last login. Keyed on user id so it
+  // only re-runs when the logged-in user actually changes.
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      try {
+        const roles = await resolveRoles(user.role, user.id);
+        const activeRole = roles.includes(user.activeRole) ? user.activeRole : user.role;
+        const rolesChanged = JSON.stringify([...roles].sort()) !== JSON.stringify([...(user.roles || [])].sort());
+        if (rolesChanged || activeRole !== user.activeRole) {
+          const updated = { ...user, roles, activeRole };
+          localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+          setUser(updated);
+        }
+      } catch (err) {
+        console.warn("Failed to refresh roles", err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // ── LOGIN ────────────────────────────────────────────────────
   // usedPhoneOtp: pass true when this call follows a successful
@@ -170,6 +215,11 @@ export function AuthProvider({ children }) {
 
         sessionUser = { ...profile, uid: fbUser.uid };
       }
+
+      // Merge in any extra roles granted via user_roles, default active
+      // dashboard is the role they logged in through.
+      const roles = await resolveRoles(sessionUser.role, sessionUser.id);
+      sessionUser = { ...sessionUser, roles, activeRole: sessionUser.role };
 
       localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
       setUser(sessionUser);
@@ -375,10 +425,6 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   // ── CLEAR ACCOUNT DATA (wipes Firestore + Supabase data for this user) ──
-  // NOTE: this must live INSIDE AuthProvider — it was previously declared
-  // after the component's closing brace, so `user` and `logout` were out
-  // of scope and it threw "user is not defined" as soon as the module
-  // evaluated (or on first call).
   const clearAccountData = useCallback(async () => {
     if (!user?.id) return { success: false, error: "No authenticated user." };
     const uid = user.id, role = user.role;
@@ -394,6 +440,41 @@ export function AuthProvider({ children }) {
     if (success) { try { await logout(); } catch {} } // force a clean reload
     return { success, details: result };
   }, [user, logout]);
+
+  // ══════════════════════════════════════════════════════════
+  // MULTI-ROLE ACCESS
+  // ══════════════════════════════════════════════════════════
+
+  // Switch the active dashboard for a user who holds multiple roles.
+  // Does NOT touch their authorized role list — only which one is "active".
+  const setActiveRole = useCallback((role) => {
+    if (!user) return;
+    if (!user.roles?.includes(role)) {
+      console.warn(`Cannot switch to role "${role}": not authorized for this account.`);
+      return;
+    }
+    const updated = { ...user, activeRole: role };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+    setUser(updated);
+  }, [user]);
+
+  const hasRole = useCallback((role) => !!user?.roles?.includes(role), [user]);
+  const hasAnyRole = useCallback((rolesToCheck = []) => !!user?.roles?.some((r) => rolesToCheck.includes(r)), [user]);
+  const hasAllRoles = useCallback((rolesToCheck = []) => rolesToCheck.every((r) => !!user?.roles?.includes(r)), [user]);
+
+  // Admin-only: fully syncs a target user's role set. `roles` should be
+  // the complete desired list (their primary role is always re-added
+  // even if omitted, so it can never accidentally be dropped this way).
+  const manageUserRoles = useCallback(async (targetUserId, roles, targetPrimaryRole) => {
+    const actingRole = user?.activeRole || user?.role;
+    if (actingRole !== "admin") {
+      return { success: false, error: "Only admins can manage roles." };
+    }
+    const finalRoles = Array.from(new Set([targetPrimaryRole, ...roles].filter(Boolean)));
+    const result = await setUserRoles(targetUserId, finalRoles);
+    if (result.success) bump();
+    return result;
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{
@@ -412,6 +493,12 @@ export function AuthProvider({ children }) {
       updateUserProfile,
       clearAccountData,
       enrolledVersion,
+      // multi-role
+      setActiveRole,
+      hasRole,
+      hasAnyRole,
+      hasAllRoles,
+      manageUserRoles,
     }}>
       {children}
     </AuthContext.Provider>

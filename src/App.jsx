@@ -20,22 +20,19 @@ const ROLE_ROUTES = {
   admin: "/admin",
 };
 
-// Root route ("/") — if a session already exists in AuthContext (restored
-// from localStorage on app load), skip Login entirely and go straight to
-// that user's dashboard. This is what prevents the PWA from showing the
-// login/role-select screen every time it's reopened despite an active session.
 function RootRoute() {
   const { user } = useAuth();
-  if (user && ROLE_ROUTES[user.role]) {
-    return <Navigate to={ROLE_ROUTES[user.role]} replace />;
+  const role = user?.activeRole || user?.role;
+  if (user && ROLE_ROUTES[role]) {
+    return <Navigate to={ROLE_ROUTES[role]} replace />;
   }
   return <Login />;
 }
 
 function ProtectedRoute({ children, role }) {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   if (!user) return <Navigate to="/" />;
-  if (role && user.role !== role) return <Navigate to="/" />;
+  if (role && !hasRole(role)) return <Navigate to="/" />;
   return children;
 }
 

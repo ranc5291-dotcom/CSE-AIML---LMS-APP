@@ -3,9 +3,11 @@ import { useAuth, getAllStudents, getAllFaculty, getAllPlacement, getAllAdmins }
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
+import { getAllUserRoles } from "../utils/supabase";
 
-const TABS = ["Overview", "Student Management", "Faculty", "Placement & Admin", "Complaints", "Announcements", "Notice Board", "Gallery"];
-
+const TABS = ["Overview", "Student Management", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Announcements", "Notice Board", "Gallery"];
+const ALL_ROLES = ["student", "faculty", "admin", "placement"];
+const ROLE_LABELS_MAP = { student: "Student", faculty: "Faculty", admin: "Admin", placement: "Placement" };
 const SEM_SEQUENCE = [
   { year: "1st Year", sem: "Sem 1" }, { year: "1st Year", sem: "Sem 2" },
   { year: "2nd Year", sem: "Sem 3" }, { year: "2nd Year", sem: "Sem 4" },
@@ -31,7 +33,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function AdminDashboard() {
-  const { user, updateStudentStatus, promoteStudent, detainStudent, removeStudent, getLoginLog, enrolledVersion } = useAuth();
+  const { user, updateStudentStatus, promoteStudent, detainStudent, removeStudent, getLoginLog, enrolledVersion, manageUserRoles } = useAuth();
   const {
     complaints, updateComplaintStatus, removeComplaint,
     announcements, addAnnouncement, removeAnnouncement,
@@ -49,6 +51,10 @@ export default function AdminDashboard() {
   const [filterSem, setFilterSem]         = useState("All");
   const [filterStatus, setFilterStatus]   = useState("All");
   const [confirmAction, setConfirmAction] = useState(null);
+  const [userRolesMap, setUserRolesMap] = useState({});
+  const [pendingRoles, setPendingRoles] = useState({});
+  const [roleSearch, setRoleSearch] = useState("");
+  const [savingRoles, setSavingRoles] = useState(null);
 
   // Sorting — Student Management
   const [sortBy, setSortBy]   = useState("name");
@@ -81,6 +87,14 @@ export default function AdminDashboard() {
     getAllPlacement().then(setPlacement);
     getAllAdmins().then(setAdmins);
     getLoginLog().then(setLoginLog);
+    getAllUserRoles().then((rows) => {
+      const map = {};
+      rows.forEach((r) => {
+        if (!map[r.user_id]) map[r.user_id] = [];
+        map[r.user_id].push(r.role);
+      });
+      setUserRolesMap(map);
+    });
   }, [enrolledVersion]);
 
   const filteredStudents = students.filter((s) => {
@@ -193,6 +207,35 @@ export default function AdminDashboard() {
       console.warn("Gallery sync warning:", err.message);
     }
     setGalleryUploading(false);
+  };
+
+  const allUsers = [...students, ...faculty, ...placement, ...admins];
+
+  const getRolesFor = (u) => {
+    if (pendingRoles[u.id]) return pendingRoles[u.id];
+    return Array.from(new Set([u.role, ...(userRolesMap[u.id] || [])]));
+  };
+
+  const toggleRole = (u, role) => {
+    if (role === u.role) return; // primary role can't be unchecked here
+    const current = getRolesFor(u);
+    const next = current.includes(role)
+      ? current.filter((r) => r !== role)
+      : [...current, role];
+    setPendingRoles((prev) => ({ ...prev, [u.id]: next }));
+  };
+
+  const savePermissions = async (u) => {
+    const roles = getRolesFor(u);
+    setSavingRoles(u.id);
+    const result = await manageUserRoles(u.id, roles, u.role);
+    setSavingRoles(null);
+    if (result.success) {
+      setUserRolesMap((prev) => ({ ...prev, [u.id]: roles }));
+      setPendingRoles((prev) => { const p = { ...prev }; delete p[u.id]; return p; });
+    } else {
+      alert("Failed to save roles: " + result.error);
+    }
   };
 
   // ── EXPORT TO EXCEL (CSV) ─────────────────────────────────────
@@ -650,6 +693,85 @@ export default function AdminDashboard() {
                     );
                   })}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── ROLES & ACCESS ── */}
+          {activeTab === "Roles & Access" && (
+            <div className="space-y-4">
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4">
+                <input
+                  value={roleSearch}
+                  onChange={(e) => setRoleSearch(e.target.value)}
+                  placeholder="🔍 Search by name, email, or ID..."
+                  className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2 text-[var(--color-text-primary)] text-sm placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)]"
+                />
+                <p className="text-[var(--color-text-muted)] text-xs mt-2">
+                  Assign extra dashboard access to specific users. Their primary role (shown locked) can't be removed here.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {allUsers
+                  .filter((u) => {
+                    const q = roleSearch.toLowerCase();
+                    return !q ||
+                      u.name?.toLowerCase().includes(q) ||
+                      u.email?.toLowerCase().includes(q) ||
+                      (u.usn || u.id)?.toLowerCase().includes(q);
+                  })
+                  .map((u) => {
+                    const roles = getRolesFor(u);
+                    const isDirty = !!pendingRoles[u.id];
+                    return (
+                      <div key={u.id} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                          <div>
+                            <p className="text-[var(--color-text-primary)] font-semibold text-sm">{u.name}</p>
+                            <p className="text-[var(--color-text-muted)] text-xs">
+                              {u.email || u.usn || u.id} · Primary role: <span className="capitalize">{u.role}</span>
+                            </p>
+                          </div>
+                          {isDirty && (
+                            <button
+                              onClick={() => savePermissions(u)}
+                              disabled={savingRoles === u.id}
+                              className="px-3 py-1.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-50 text-white rounded-lg text-xs font-medium cursor-pointer"
+                            >
+                              {savingRoles === u.id ? "Saving..." : "💾 Save Permissions"}
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          {ALL_ROLES.map((r) => {
+                            const checked = roles.includes(r);
+                            const isPrimary = r === u.role;
+                            return (
+                              <label
+                                key={r}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium
+                                  ${checked ? "bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)]" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}
+                                  ${isPrimary ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={isPrimary}
+                                  onChange={() => toggleRole(u, r)}
+                                  className={isPrimary ? "cursor-not-allowed" : "cursor-pointer"}
+                                />
+                                {ROLE_LABELS_MAP[r]}{isPrimary ? " (primary)" : ""}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                {allUsers.length === 0 && (
+                  <p className="text-[var(--color-text-muted)] text-sm text-center py-10">No users found.</p>
+                )}
               </div>
             </div>
           )}
