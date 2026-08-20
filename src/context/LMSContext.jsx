@@ -560,6 +560,30 @@ export function LMSProvider({ children }) {
     try { await deleteDoc(doc(db, "companies", String(id))); } catch {}
     setCompanies((p) => p.filter((c) => c.id !== id));
   };
+  // Toggles/sets a company drive's Open/Closed status. Optimistic local
+  // update first (instant UI feedback), then persists to Firestore —
+  // same pattern as updateComplaintStatus above.
+  const updateCompanyStatus = async (id, status) => {
+    setCompanies((p) => p.map((c) => c.id === id ? { ...c, status } : c));
+    try {
+      await updateDoc(doc(db, "companies", String(id)), { status });
+    } catch (e) {
+      console.warn("updateCompanyStatus:", e.message);
+    }
+  };
+
+  // Full edit of a company's details (name, role, package, deadline,
+  // eligibility, description, googleFormUrl, status — whatever fields
+  // are passed in `updates`). Optimistic local merge, then a single
+  // Firestore updateDoc with just the changed fields.
+  const updateCompany = async (id, updates) => {
+    setCompanies((p) => p.map((c) => c.id === id ? { ...c, ...updates } : c));
+    try {
+      await updateDoc(doc(db, "companies", String(id)), { ...updates });
+    } catch (e) {
+      console.warn("updateCompany:", e.message);
+    }
+  };
 
   // ── FUND REQUESTS ─────────────────────────────────────────────
   const addFundRequest    = (req) => setFundRequests((p) => [{ ...req, id: Date.now(), status: "Active", date: new Date().toISOString().split("T")[0] }, ...p]);
@@ -655,7 +679,7 @@ export function LMSProvider({ children }) {
       fundRequests, addFundRequest, removeFundRequest,
       semResources, addSemResource, removeSemResource,
       complaints, addComplaint, updateComplaintStatus, removeComplaint,
-      companies, addCompany, removeCompany, companiesLoading,
+      companies, addCompany, removeCompany, updateCompanyStatus, companiesLoading,
       dsaList, addDsa, removeDsa,
       aptitude, addAptitude, removeAptitude,
       placementUploads, addPlacementUpload, removePlacementUpload,

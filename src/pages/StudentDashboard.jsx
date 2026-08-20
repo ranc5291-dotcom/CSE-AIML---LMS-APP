@@ -16,7 +16,7 @@ const YEARS = [
 
 const ALL_SEMS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"];
 
-const DASHBOARD_TABS = ["Overview", "Notes & Subjects", "Placement", "Marks"];
+const DASHBOARD_TABS = ["Overview", "Notes & Subjects", "Placement", "Marks", "Attendance"];
 
 // getStudentMarksFull() expects a year LABEL ("3rd Year") alongside the sem
 // label ("Sem 5") — it does yearNumber()/semNumber() conversion internally.
@@ -431,7 +431,7 @@ export default function StudentDashboard() {
   };
 
   const STATS = [
-    { label: "Attendance",          value: `${avgAttendance}%`, color: "from-blue-500 to-cyan-500",    onClick: () => setActiveTab("Marks") },
+    { label: "Attendance",          value: `${avgAttendance}%`, color: "from-blue-500 to-cyan-500",    onClick: () => setActiveTab("Attendance") },
     { label: "CGPA",                value: avgMarks,             color: "from-violet-500 to-purple-500", onClick: () => setActiveTab("Marks") },
     { label: "Pending Assignments", value: myAssignments.length, color: "from-amber-500 to-orange-500", onClick: () => setActiveTab("Notes & Subjects") },
     { label: "Open Drives",         value: openCompanies.length, color: "from-rose-500 to-pink-500",    onClick: () => setActiveTab("Placement") },
@@ -856,7 +856,11 @@ export default function StudentDashboard() {
                 setMarksSem={setMarksSem}
                 userId={user?.id}
               />
+            </div>
+          )}
 
+          {activeTab === "Attendance" && (
+            <div className="space-y-4">
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                 <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">My Attendance</h3>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

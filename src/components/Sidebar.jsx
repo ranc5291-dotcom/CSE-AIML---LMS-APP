@@ -7,7 +7,7 @@ const NAV_ITEMS = {
     { icon: "🏠", label: "Dashboard",   path: "/student" },
     { icon: "📚", label: "Subjects",    path: "/student", tab: "Notes & Subjects" },
     { icon: "📄", label: "Notes & PYQ", path: "/student", tab: "Notes & Subjects" },
-    { icon: "📅", label: "Attendance",  path: "/student", tab: "Marks" },
+    { icon: "📅", label: "Attendance",  path: "/student", tab: "Attendance" },
     { icon: "🏆", label: "My Marks",    path: "/student", tab: "Marks" },
     { icon: "📣", label: "Events",      path: "/events" },
     { icon: "💬", label: "Complaints",  path: "/complaints" },
@@ -87,6 +87,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const currentRole = user?.activeRole || user?.role;
   const items = NAV_ITEMS[currentRole] || NAV_ITEMS.student;
   const multiRole = (user?.roles?.length || 0) > 1;
+
+  // The tab the *current page* is actually showing right now. Falls back
+  // to "Overview" the same way StudentDashboard's own activeTab state does,
+  // so a fresh page load and a client-side nav agree on what's "active".
+  const currentTab = location.state?.tab || "Overview";
 
   const handleNav = (path, tab) => {
     navigate(path, { state: { tab } });
@@ -193,7 +198,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-1">
           {items.map((item, idx) => {
-            const isCurrentPage = location.pathname === item.path;
+            // A nav item is "active" only when both the path AND the tab
+            // match what's actually being shown. Items with no `tab` (like
+            // Dashboard) are only active on the default "Overview" tab —
+            // otherwise every "/student" item lit up together regardless
+            // of which section you were actually viewing.
+            const isCurrentPage =
+              location.pathname === item.path &&
+              (item.tab ? item.tab === currentTab : currentTab === "Overview");
 
             return (
               <button

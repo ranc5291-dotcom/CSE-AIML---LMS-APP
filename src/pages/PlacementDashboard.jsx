@@ -30,10 +30,15 @@ const COMPANY_SORT_OPTIONS = [
   { key: "package", label: "Package" },
 ];
 
+const EMPTY_COMPANY = {
+  name: "", role: "", package: "", deadline: "", status: "Open",
+  eligibility: "", description: "", googleFormUrl: "",
+};
+
 export default function PlacementDashboard() {
   const { user } = useAuth();
   const {
-    companies, addCompany, removeCompany,
+    companies, addCompany, removeCompany, updateCompanyStatus, updateCompany,
     dsaList, addDsa, removeDsa,
     aptitude, addAptitude, removeAptitude,
     placementUploads, addPlacementUpload, removePlacementUpload,
@@ -45,12 +50,10 @@ export default function PlacementDashboard() {
   const [activeTab, setActiveTab]   = useState("Companies");
   const [pdfViewer, setPdfViewer]   = useState(null);
 
-  // Companies form
+  // Companies form (shared between "Add" and "Edit" modes)
   const [showCompanyForm, setShowCompanyForm] = useState(false);
-  const [newCompany, setNewCompany] = useState({
-    name: "", role: "", package: "", deadline: "", status: "Open",
-    eligibility: "", description: "", googleFormUrl: "",
-  });
+  const [newCompany, setNewCompany] = useState(EMPTY_COMPANY);
+  const [editingCompanyId, setEditingCompanyId] = useState(null); // null = adding, else = editing this company's id
 
   // Companies sort
   const [companySortBy, setCompanySortBy]   = useState("name");
@@ -102,14 +105,47 @@ export default function PlacementDashboard() {
   const [uploading, setUploading]           = useState(false);
   const uploadRef                           = useRef(null);
 
-  const handleAddCompany = () => {
+  // Add OR Save-edit a company, depending on editingCompanyId
+  const handleSaveCompany = () => {
     if (!newCompany.name || !newCompany.role) return;
-    addCompany({ ...newCompany });
-    setNewCompany({
-      name: "", role: "", package: "", deadline: "", status: "Open",
-      eligibility: "", description: "", googleFormUrl: "",
-    });
+    if (editingCompanyId) {
+      updateCompany(editingCompanyId, { ...newCompany });
+    } else {
+      addCompany({ ...newCompany });
+    }
+    setNewCompany(EMPTY_COMPANY);
+    setEditingCompanyId(null);
     setShowCompanyForm(false);
+  };
+
+  // Opens the form pre-filled with an existing company's data
+  const handleEditCompany = (c) => {
+    setNewCompany({
+      name: c.name || "",
+      role: c.role || "",
+      package: c.package || "",
+      deadline: c.deadline || "",
+      status: c.status || "Open",
+      eligibility: c.eligibility || "",
+      description: c.description || "",
+      googleFormUrl: c.googleFormUrl || "",
+    });
+    setEditingCompanyId(c.id);
+    setShowCompanyForm(true);
+  };
+
+  // Toggles the form open/closed; always resets to a clean "Add" state
+  const handleToggleCompanyForm = () => {
+    if (showCompanyForm) {
+      setEditingCompanyId(null);
+      setNewCompany(EMPTY_COMPANY);
+    }
+    setShowCompanyForm((v) => !v);
+  };
+
+  const handleToggleCompanyStatus = (company) => {
+    const nextStatus = company.status === "Open" ? "Closed" : "Open";
+    updateCompanyStatus(company.id, nextStatus);
   };
 
   const handleAddDsa = () => {
@@ -211,7 +247,7 @@ export default function PlacementDashboard() {
                 </div>
                 {isOfficer && (
                   <button
-                    onClick={() => setShowCompanyForm(!showCompanyForm)}
+                    onClick={handleToggleCompanyForm}
                     className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
                   >
                     {showCompanyForm ? "✕ Cancel" : "+ Add Company"}
@@ -221,7 +257,9 @@ export default function PlacementDashboard() {
 
               {showCompanyForm && isOfficer && (
                 <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
-                  <h3 className="text-[var(--color-text-primary)] font-semibold">🏢 Add Company</h3>
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">
+                    {editingCompanyId ? "✏️ Edit Company" : "🏢 Add Company"}
+                  </h3>
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     {[
                       { key: "name",    placeholder: "Company name *" },
@@ -289,10 +327,10 @@ export default function PlacementDashboard() {
                   </div>
 
                   <button
-                    onClick={handleAddCompany}
+                    onClick={handleSaveCompany}
                     className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
                   >
-                    + Add Company
+                    {editingCompanyId ? "💾 Save Changes" : "+ Add Company"}
                   </button>
                 </div>
               )}
@@ -309,17 +347,40 @@ export default function PlacementDashboard() {
                         <p className="text-[var(--color-text-secondary)] text-sm">{c.role}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-lg font-medium
-                            ${c.status === "Open"
-                              ? "bg-green-500/20 text-green-400"
-                              : "bg-red-500/20 text-red-400"}`}
-                        >
-                          {c.status}
-                        </span>
+                        {isOfficer ? (
+                          <button
+                            onClick={() => handleToggleCompanyStatus(c)}
+                            title="Click to toggle status"
+                            className={`text-xs px-2 py-1 rounded-lg font-medium cursor-pointer transition-all
+                              ${c.status === "Open"
+                                ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                                : "bg-red-500/20 text-red-400 hover:bg-red-500/30"}`}
+                          >
+                            {c.status} ⇄
+                          </button>
+                        ) : (
+                          <span
+                            className={`text-xs px-2 py-1 rounded-lg font-medium
+                              ${c.status === "Open"
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-red-500/20 text-red-400"}`}
+                          >
+                            {c.status}
+                          </span>
+                        )}
+                        {isOfficer && (
+                          <button
+                            onClick={() => handleEditCompany(c)}
+                            title="Edit company"
+                            className="text-[var(--color-text-muted)] hover:text-blue-400 cursor-pointer transition-colors"
+                          >
+                            ✏️
+                          </button>
+                        )}
                         {isOfficer && (
                           <button
                             onClick={() => removeCompany(c.id)}
+                            title="Delete company"
                             className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer transition-colors"
                           >
                             🗑️
