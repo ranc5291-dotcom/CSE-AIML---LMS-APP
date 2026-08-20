@@ -43,9 +43,16 @@ export async function setupFCMToken(user) {
   if (!("Notification" in window)) return { success: false, error: "Notifications not supported." };
 
   try {
-    const permission = await Notification.requestPermission();
+    // Only actually prompt if the user hasn't already decided. Re-calling
+    // requestPermission() on an already-denied/granted state is what
+    // triggers Chrome's "dismissed several times -> auto-block" behavior
+    // when this runs repeatedly (e.g. on every tab focus).
+    let permission = Notification.permission;
+    if (permission === "default") {
+      permission = await Notification.requestPermission();
+    }
     if (permission !== "granted") {
-      return { success: false, error: "Notification permission denied." };
+      return { success: false, error: `Notification permission ${permission}.` };
     }
 
     const registration = await registerMessagingServiceWorker();
@@ -65,11 +72,14 @@ export async function setupFCMToken(user) {
 
     // Store/refresh the token in Firestore. Keyed by uid so re-registering
     // (token refresh, re-login) just overwrites the same doc.
+    // IMPORTANT: role must match whatever your backend queries by
+    // (activeRole, not a stale/static user.role) or role-targeted sends
+    // will silently find zero tokens for this user.
     await setDoc(doc(db, "fcmTokens", user.id), {
       token,
       userId: user.id,
       userName: user.name || "",
-      role: user.role || "",
+      role: user.activeRole || user.role || "",
       updatedAt: serverTimestamp(),
     });
 
