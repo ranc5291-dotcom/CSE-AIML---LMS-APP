@@ -16,8 +16,8 @@ fs_client = firestore.client()
 OTP_TTL_MINUTES = 10
 MAX_ATTEMPTS = 5
 
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "onboarding@resend.dev")
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@cseaimllms.com")  # any address works, doesn't need to be a real inbox
 FROM_NAME  = os.getenv("FROM_NAME", "CSEAIML LMS")
 
 
@@ -34,20 +34,21 @@ def _hash_otp(otp: str) -> str:
 
 
 def _send_email(to_email: str, otp: str):
-    if not RESEND_API_KEY:
-        raise HTTPException(500, "Email service not configured on the server (missing RESEND_API_KEY).")
+    if not BREVO_API_KEY:
+        raise HTTPException(500, "Email service not configured on the server (missing BREVO_API_KEY).")
 
     resp = requests.post(
-        "https://api.resend.com/emails",
+        "https://api.brevo.com/v3/smtp/email",
         headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "api-key": BREVO_API_KEY,
             "Content-Type": "application/json",
+            "Accept": "application/json",
         },
         json={
-            "from": f"{FROM_NAME} <{FROM_EMAIL}>",
-            "to": [to_email],
+            "sender": {"name": FROM_NAME, "email": FROM_EMAIL},
+            "to": [{"email": to_email}],
             "subject": "Your CSEAIML LMS verification code",
-            "text": (
+            "textContent": (
                 f"Your CSEAIML LMS verification code is: {otp}\n\n"
                 f"This code expires in {OTP_TTL_MINUTES} minutes. "
                 f"If you did not request this, you can safely ignore this email."
