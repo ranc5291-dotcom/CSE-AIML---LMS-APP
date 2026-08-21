@@ -1,8 +1,7 @@
 import random
 import hashlib
 import os
-import smtplib
-from email.mime.text import MIMEText
+import requests
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -17,11 +16,8 @@ fs_client = firestore.client()
 OTP_TTL_MINUTES = 10
 MAX_ATTEMPTS = 5
 
-SMTP_HOST  = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT  = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER  = os.getenv("SMTP_USER")
-SMTP_PASS  = os.getenv("SMTP_PASS")
-FROM_EMAIL = os.getenv("FROM_EMAIL", SMTP_USER)
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "onboarding@resend.dev")
 FROM_NAME  = os.getenv("FROM_NAME", "CSEAIML LMS")
 
 
@@ -38,21 +34,29 @@ def _hash_otp(otp: str) -> str:
 
 
 def _send_email(to_email: str, otp: str):
-    if not SMTP_USER or not SMTP_PASS:
-        raise HTTPException(500, "Email service not configured on the server (missing SMTP_USER/SMTP_PASS).")
-    body = (
-        f"Your CSEAIML LMS verification code is: {otp}\n\n"
-        f"This code expires in {OTP_TTL_MINUTES} minutes. "
-        f"If you did not request this, you can safely ignore this email."
+    if not RESEND_API_KEY:
+        raise HTTPException(500, "Email service not configured on the server (missing RESEND_API_KEY).")
+
+    resp = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": f"{FROM_NAME} <{FROM_EMAIL}>",
+            "to": [to_email],
+            "subject": "Your CSEAIML LMS verification code",
+            "text": (
+                f"Your CSEAIML LMS verification code is: {otp}\n\n"
+                f"This code expires in {OTP_TTL_MINUTES} minutes. "
+                f"If you did not request this, you can safely ignore this email."
+            ),
+        },
+        timeout=10,
     )
-    msg = MIMEText(body)
-    msg["Subject"] = "Your CSEAIML LMS verification code"
-    msg["From"] = f"{FROM_NAME} <{FROM_EMAIL}>"
-    msg["To"] = to_email
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(FROM_EMAIL, [to_email], msg.as_string())
+    if resp.status_code >= 400:
+        raise HTTPException(500, f"Failed to send email: {resp.text}")
 
 
 @router.post("/send")
@@ -69,12 +73,7 @@ async def send_email_otp(data: SendOtpRequest):
         "createdAt": firestore.SERVER_TIMESTAMP,
     })
 
-    try:
-        _send_email(email, otp)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Failed to send email: {str(e)}")
+    _send_email(email, otp)
 
     return {"success": True, "message": "OTP sent to your email."}
 
