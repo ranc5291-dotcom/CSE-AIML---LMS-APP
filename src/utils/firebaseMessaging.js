@@ -7,8 +7,6 @@ const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 let messagingInstance = null;
 let swRegistration = null;
 
-// Registers the FCM-specific service worker under its own scope so it
-// never conflicts with the Workbox PWA service worker at "/".
 export async function registerMessagingServiceWorker() {
   if (!("serviceWorker" in navigator)) return null;
   if (swRegistration) return swRegistration;
@@ -37,16 +35,13 @@ function getMessagingInstance() {
 }
 
 // Requests permission, retrieves the FCM token, and saves it to Firestore
-// keyed by user id + role, so the backend can query by role for targeted sends.
+// keyed by user id + role + year + sem, so the backend can query by role
+// alone (global sends) or role+year+sem (academic-targeted sends).
 export async function setupFCMToken(user) {
   if (!user?.id) return { success: false, error: "No user provided." };
   if (!("Notification" in window)) return { success: false, error: "Notifications not supported." };
 
   try {
-    // Only actually prompt if the user hasn't already decided. Re-calling
-    // requestPermission() on an already-denied/granted state is what
-    // triggers Chrome's "dismissed several times -> auto-block" behavior
-    // when this runs repeatedly (e.g. on every tab focus).
     let permission = Notification.permission;
     if (permission === "default") {
       permission = await Notification.requestPermission();
@@ -70,16 +65,13 @@ export async function setupFCMToken(user) {
       return { success: false, error: "Could not retrieve FCM token." };
     }
 
-    // Store/refresh the token in Firestore. Keyed by uid so re-registering
-    // (token refresh, re-login) just overwrites the same doc.
-    // IMPORTANT: role must match whatever your backend queries by
-    // (activeRole, not a stale/static user.role) or role-targeted sends
-    // will silently find zero tokens for this user.
     await setDoc(doc(db, "fcmTokens", user.id), {
       token,
       userId: user.id,
       userName: user.name || "",
       role: user.activeRole || user.role || "",
+      year: user.year || null,
+      sem: user.sem || null,
       updatedAt: serverTimestamp(),
     });
 
@@ -90,7 +82,6 @@ export async function setupFCMToken(user) {
   }
 }
 
-// Call on logout so a stale token isn't left targetable after the user signs out.
 export async function removeFCMToken(userId) {
   if (!userId) return;
   try {
@@ -100,8 +91,6 @@ export async function removeFCMToken(userId) {
   }
 }
 
-// Foreground listener — fires when a push arrives while the tab is open
-// and focused. Returns an unsubscribe function.
 export function onForegroundMessage(callback) {
   const messaging = getMessagingInstance();
   if (!messaging) return () => {};

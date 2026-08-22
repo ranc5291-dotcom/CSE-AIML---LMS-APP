@@ -416,14 +416,20 @@ export default function StudentDashboard() {
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 3);
 
-  const allNotices = [
+   const allNotices = [
     ...(notices || []),
     ...(announcements || []),
-  ].sort((a, b) => {
-    const ta = a.createdAt?.seconds || 0;
-    const tb = b.createdAt?.seconds || 0;
-    return tb - ta;
-  });
+  ]
+    .filter((n) => {
+      const targetType = n.targetType || "global"; // old docs without the field = global, unchanged
+      if (targetType === "global") return true;
+      return n.year === user?.year && n.semester === user?.sem;
+    })
+    .sort((a, b) => {
+      const ta = a.createdAt?.seconds || 0;
+      const tb = b.createdAt?.seconds || 0;
+      return tb - ta;
+    });
 
   const openPDF = (fileUrl, fileName) => {
     if (fileUrl) setPdfViewer({ fileUrl, fileName });

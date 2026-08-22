@@ -17,7 +17,7 @@ OTP_TTL_MINUTES = 10
 MAX_ATTEMPTS = 5
 
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@cseaimllms.com")  # any address works, doesn't need to be a real inbox
+FROM_EMAIL = os.getenv("FROM_EMAIL", "ranc5291@gmail.com")
 FROM_NAME  = os.getenv("FROM_NAME", "CSEAIML LMS")
 
 

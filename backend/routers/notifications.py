@@ -7,7 +7,7 @@ from firebase_admin_init import get_firebase_app
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
-get_firebase_app()  # ensure initialized before any messaging calls
+get_firebase_app()
 fs_client = firestore.client()
 
 
@@ -15,11 +15,14 @@ class NotificationCreate(BaseModel):
     title: str
     body: str
     url: Optional[str] = "/"
-    role: Optional[str] = None       # "student" | "faculty" | "placement" | "admin" | None (= everyone)
-    userIds: Optional[List[str]] = None  # target specific users instead of a whole role
+    role: Optional[str] = None
+    userIds: Optional[List[str]] = None
+    year: Optional[str] = None
+    semester: Optional[str] = None
 
 
-def _get_tokens(role: Optional[str], user_ids: Optional[List[str]]) -> List[str]:
+def _get_tokens(role: Optional[str], user_ids: Optional[List[str]],
+                 year: Optional[str] = None, semester: Optional[str] = None) -> List[str]:
     tokens_ref = fs_client.collection("fcmTokens")
 
     if user_ids:
@@ -29,6 +32,10 @@ def _get_tokens(role: Optional[str], user_ids: Optional[List[str]]) -> List[str]
     query = tokens_ref
     if role:
         query = query.where("role", "==", role)
+    if year:
+        query = query.where("year", "==", year)
+    if semester:
+        query = query.where("semester", "==", semester)
 
     docs = query.stream()
     return [d.to_dict()["token"] for d in docs if d.to_dict().get("token")]
@@ -36,7 +43,7 @@ def _get_tokens(role: Optional[str], user_ids: Optional[List[str]]) -> List[str]
 
 @router.post("/send")
 async def send_notification(data: NotificationCreate):
-    tokens = _get_tokens(data.role, data.userIds)
+    tokens = _get_tokens(data.role, data.userIds, data.year, data.semester)
 
     if not tokens:
         raise HTTPException(404, "No registered devices found for the given target.")
@@ -52,8 +59,6 @@ async def send_notification(data: NotificationCreate):
     except Exception as e:
         raise HTTPException(500, f"Failed to send notifications: {str(e)}")
 
-    # Clean up dead tokens (uninstalled app / revoked permission) so future
-    # sends don't keep failing against them.
     if response.failure_count > 0:
         for idx, resp in enumerate(response.responses):
             if not resp.success:

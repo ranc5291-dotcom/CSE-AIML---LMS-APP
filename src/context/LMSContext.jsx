@@ -20,6 +20,15 @@ const INITIAL_SUBJECTS = {
   "Sem 8": ["Research Methodology", "Entrepreneurship", "Project Phase II", "Elective"],
 };
 
+// Maps a sem label to its year label — used to auto-target notifications
+// and notices to the right students, without faculty selecting anything.
+const SEM_TO_YEAR = {
+  "Sem 1": "1st Year", "Sem 2": "1st Year",
+  "Sem 3": "2nd Year", "Sem 4": "2nd Year",
+  "Sem 5": "3rd Year", "Sem 6": "3rd Year",
+  "Sem 7": "4th Year", "Sem 8": "4th Year",
+};
+
 async function uploadToCloudinary(file) {
   const CLOUD_NAME    = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "cseaiml_unsigned";
@@ -41,10 +50,6 @@ async function uploadToCloudinary(file) {
 }
 
 // ── Marks helpers (exported — usable from any component) ──────
-// Old marks docs stored a subject as a flat { scored, total } object.
-// New docs store a subject as { "Internal 1": {scored,total}, "Internal 2": {...} }.
-// This normalizes either shape into the new nested shape so every screen
-// can read marks the same way regardless of when they were written.
 export function normalizeSubjectMarks(subjectData) {
   if (!subjectData || typeof subjectData !== "object") return {};
   if ("scored" in subjectData || "total" in subjectData) {
@@ -53,8 +58,6 @@ export function normalizeSubjectMarks(subjectData) {
   return subjectData;
 }
 
-// How many internals a subject has been configured with (default 1, which
-// keeps old subjects/behavior identical — a single "Marks" column).
 export function getInternalCount(internals, sem, subject) {
   const n = internals?.[sem]?.[subject];
   return n && n > 0 ? n : 1;
@@ -67,13 +70,12 @@ export function LMSProvider({ children }) {
   const [assignments, setAssignments]     = useState([]);
   const [attendance, setAttendance]       = useState({});
   const [marks, setMarks]                 = useState({});
-  const [internals, setInternals]         = useState({}); // { [sem]: { [subject]: count } }
-  const [markSheetUploads, setMarkSheetUploads] = useState([]); // raw excel files (unparsed)
+  const [internals, setInternals]         = useState({});
+  const [markSheetUploads, setMarkSheetUploads] = useState([]);
   const [events, setEvents]               = useState([]);
   const [notices, setNotices]             = useState([]);
   const [announcements, setAnnouncements] = useState([]);
 
-  // ── GALLERY — Firestore-synced + local fallback (survives failed/offline writes) ──
   const [galleryFirestore, setGalleryFirestore] = useState([]);
   const [galleryFallback, setGalleryFallback]   = useState([]);
   const gallery = [...galleryFallback, ...galleryFirestore];
@@ -87,10 +89,8 @@ export function LMSProvider({ children }) {
   const [aptitude, setAptitude]           = useState([]);
   const [placementUploads, setPlacementUploads] = useState([]);
 
-  // ── PROMOTIONS — notifies students when admin promotes them ──
   const [promotions, setPromotions]       = useState([]);
 
-  // ── ALL FIRESTORE LISTENERS ───────────────────────────────────
   useEffect(() => {
     const unsubs = [];
 
@@ -105,54 +105,29 @@ export function LMSProvider({ children }) {
       } catch { setter(fallback); }
     }
 
-    // Notes — real-time
     listen("notes", (data) => {
       setNotes(data);
       setNotesLoading(false);
     }, []);
 
-    // Assignments
     listen("assignments", setAssignments, []);
 
-    // Companies — no fake seed data; empty means genuinely empty
     listen("companies", (data) => {
       setCompanies(data);
       setCompaniesLoading(false);
     }, []);
 
-    // Notices — real-time (all roles see this)
     listen("notices", setNotices, []);
-
-    // Announcements — no fake seed data
     listen("announcements", setAnnouncements, []);
-
-    // Gallery — real-time (Firestore-synced portion only; local fallback is separate)
     listen("gallery", setGalleryFirestore, []);
-
-    // DSA — no fake seed data
     listen("dsa", setDsaList, []);
-
-    // Aptitude — no fake seed data
     listen("aptitude", setAptitude, []);
-
-    // Placement uploads
     listen("placementUploads", setPlacementUploads, []);
-
-    // Mark sheet uploads — raw excel files faculty just want stored, unparsed
     listen("markSheetUploads", setMarkSheetUploads, []);
-
-    // Promotions — real-time, so students see the popup as soon as admin promotes them
     listen("promotions", setPromotions, []);
-
-    // Events — no fake seed data
     listen("events", setEvents, [], "date", "asc");
-
-    // Complaints — no fake seed data; this was the source of the sync
-    // confusion (Admin showed 0 while other sessions showed fake "Projector"
-    // / "Wi-Fi" placeholder complaints that were never real submissions).
     listen("complaints", setComplaints, []);
 
-    // Subjects
     try {
       const unsub = onSnapshot(collection(db, "subjects"),
         (snap) => {
@@ -167,7 +142,6 @@ export function LMSProvider({ children }) {
       unsubs.push(unsub);
     } catch {}
 
-    // Subject internals config — how many internals each subject has
     try {
       const unsub = onSnapshot(collection(db, "subjectInternals"),
         (snap) => {
@@ -183,7 +157,6 @@ export function LMSProvider({ children }) {
       unsubs.push(unsub);
     } catch {}
 
-    // Marks from Firestore (official, faculty-entered)
     try {
       const unsub = onSnapshot(collection(db, "marks"),
         (snap) => {
@@ -201,7 +174,6 @@ export function LMSProvider({ children }) {
       unsubs.push(unsub);
     } catch {}
 
-    // Attendance from Firestore
     try {
       const unsub = onSnapshot(collection(db, "attendance"),
         (snap) => {
@@ -251,10 +223,6 @@ export function LMSProvider({ children }) {
     } catch (e) { console.warn("removeSubject:", e.message); }
   };
 
-  // ── SUBJECT INTERNALS — how many internals (Internal 1, Internal 2, ...)
-  // a subject has. Faculty sets this; Mark Sheets/Excel/self-marks all read
-  // it. Default is 1 (a single "Marks" column) so existing subjects are
-  // unaffected until a faculty member explicitly changes the count.
   const setSubjectInternals = async (sem, subject, count) => {
     setInternals((p) => ({
       ...p,
@@ -270,7 +238,7 @@ export function LMSProvider({ children }) {
     } catch (e) { console.warn("setSubjectInternals:", e.message); }
   };
 
-  // ── NOTES — Cloudinary + Firestore ───────────────────────────
+  // ── NOTES — Cloudinary + Firestore, auto-targeted notice + push ──
   const addNote = async (noteData, file) => {
     let fileUrl = null, fileName = noteData.file || "", fileSize = noteData.size || "";
     if (file) {
@@ -284,11 +252,30 @@ export function LMSProvider({ children }) {
       createdAt: serverTimestamp(),
       date: new Date().toLocaleDateString(),
     });
+
+    // Persisted, in-app notice — auto-targeted to this note's year/sem.
+    await addDoc(collection(db, "notices"), {
+      title:      `New ${noteData.type} — ${noteData.subject}`,
+      content:    `Uploaded for ${noteData.sem}`,
+      tag:        "Academic",
+      postedBy:   noteData.uploadedBy,
+      postedRole: "faculty",
+      targetType: "academic",
+      year:       SEM_TO_YEAR[noteData.sem] || null,
+      semester:   noteData.sem,
+      createdAt:  serverTimestamp(),
+      date:       new Date().toLocaleDateString(),
+      time:       new Date().toLocaleTimeString(),
+    });
+
+    // Live push — only to devices whose fcmTokens doc matches this year/sem.
     sendNotification({
       title: `New ${noteData.type} — ${noteData.subject}`,
       body: `Uploaded for ${noteData.sem}`,
       url: "/student/notes",
       role: "student",
+      year: SEM_TO_YEAR[noteData.sem] || null,
+      semester: noteData.sem,
     });
   };
 
@@ -325,7 +312,7 @@ export function LMSProvider({ children }) {
     setGalleryFirestore((p) => p.filter((g) => g.id !== id));
   };
 
-  // ── NOTICES ───────────────────────────────────────────────────
+  // ── NOTICES — targetType defaults to "global" for backward compat ──
   const addNotice = async (notice) => {
     await addDoc(collection(db, "notices"), {
       title:      notice.title,
@@ -333,6 +320,9 @@ export function LMSProvider({ children }) {
       tag:        notice.tag || "Notice",
       postedBy:   notice.postedBy,
       postedRole: notice.postedRole || "admin",
+      targetType: notice.targetType || "global",
+      year:       notice.year || null,
+      semester:   notice.semester || null,
       createdAt:  serverTimestamp(),
       date:       new Date().toLocaleDateString(),
       time:       new Date().toLocaleTimeString(),
@@ -348,7 +338,7 @@ export function LMSProvider({ children }) {
     setNotices((p) => p.filter((n) => n.id !== id));
   };
 
-  // ── ANNOUNCEMENTS ─────────────────────────────────────────────
+  // ── ANNOUNCEMENTS — unchanged, always global ─────────────────
   const addAnnouncement = async (a) => {
     await addDoc(collection(db, "announcements"), {
       title: a.title, tag: a.tag, postedBy: a.postedBy,
@@ -387,12 +377,6 @@ export function LMSProvider({ children }) {
   };
 
   // ── MARKS (official, faculty-entered) ────────────────────────
-  // Every subject can have one or more "internals" (Internal 1, Internal 2,
-  // ...), configured per subject via setSubjectInternals. Marks are stored
-  // as marks.{subject}.{internalLabel} = {scored,total}. A single setDoc
-  // with {merge:true} writes straight to the doc keyed by studentId — no
-  // read, no race, and Firestore deep-merges nested map fields so other
-  // subjects/internals on the same doc are left untouched.
   const updateMark = async (studentId, subject, internalLabel, scored, total = 100, studentName = "", sem = "") => {
     setMarks((p) => ({
       ...p,
@@ -418,11 +402,6 @@ export function LMSProvider({ children }) {
     }
   };
 
-  // ── BULK MARKS UPLOAD (Excel import) ─────────────────────────
-  // rows: array of { studentId, studentName, subject, internal, scored, total }
-  // "internal" defaults to "Internal 1" if not supplied. Groups rows by
-  // studentId so each student gets ONE merged write, instead of one write
-  // per cell in the sheet.
   const updateMarksBulk = async (rows, sem = "") => {
     const grouped = {};
     rows.forEach((r) => {
@@ -440,7 +419,6 @@ export function LMSProvider({ children }) {
       };
     });
 
-    // Optimistic local update
     setMarks((p) => {
       const next = { ...p };
       Object.entries(grouped).forEach(([studentId, g]) => {
@@ -475,9 +453,6 @@ export function LMSProvider({ children }) {
     return { total: Object.keys(grouped).length, failed };
   };
 
-  // ── MARK SHEET UPLOADS — raw excel/csv files faculty just want stored
-  // and downloadable, exactly like a Notes upload. Never parsed, never
-  // touches the "marks" collection above.
   const addMarkSheetUpload = async (data, file) => {
     let fileUrl = null, fileName = data.file || "", fileSize = data.size || "";
     if (file) {
@@ -499,7 +474,7 @@ export function LMSProvider({ children }) {
     setMarkSheetUploads((p) => p.filter((m) => m.id !== id));
   };
 
-  // ── ASSIGNMENTS ───────────────────────────────────────────────
+  // ── ASSIGNMENTS — auto-targeted notice + push ────────────────
   const addAssignment = async (data, file = null) => {
     let fileUrl = null, fileName = null;
     if (file) {
@@ -507,11 +482,28 @@ export function LMSProvider({ children }) {
       fileUrl = up.fileUrl; fileName = up.fileName;
     }
     await addDoc(collection(db, "assignments"), { ...data, fileUrl, file: fileName, createdAt: serverTimestamp() });
+
+    await addDoc(collection(db, "notices"), {
+      title:      `New Assignment — ${data.subject || data.title}`,
+      content:    data.due ? `Due ${data.due}` : "Check the assignment details",
+      tag:        "Academic",
+      postedBy:   data.uploadedBy || data.postedBy || "Faculty",
+      postedRole: "faculty",
+      targetType: "academic",
+      year:       SEM_TO_YEAR[data.sem] || null,
+      semester:   data.sem || null,
+      createdAt:  serverTimestamp(),
+      date:       new Date().toLocaleDateString(),
+      time:       new Date().toLocaleTimeString(),
+    });
+
     sendNotification({
       title: `New Assignment — ${data.subject || data.title}`,
       body: data.due ? `Due ${data.due}` : "Check the assignment details",
       url: "/student/assignments",
       role: "student",
+      year: SEM_TO_YEAR[data.sem] || null,
+      semester: data.sem || null,
     });
   };
   const removeAssignment = async (id) => {
@@ -560,9 +552,6 @@ export function LMSProvider({ children }) {
     try { await deleteDoc(doc(db, "companies", String(id))); } catch {}
     setCompanies((p) => p.filter((c) => c.id !== id));
   };
-  // Toggles/sets a company drive's Open/Closed status. Optimistic local
-  // update first (instant UI feedback), then persists to Firestore —
-  // same pattern as updateComplaintStatus above.
   const updateCompanyStatus = async (id, status) => {
     setCompanies((p) => p.map((c) => c.id === id ? { ...c, status } : c));
     try {
@@ -572,10 +561,6 @@ export function LMSProvider({ children }) {
     }
   };
 
-  // Full edit of a company's details (name, role, package, deadline,
-  // eligibility, description, googleFormUrl, status — whatever fields
-  // are passed in `updates`). Optimistic local merge, then a single
-  // Firestore updateDoc with just the changed fields.
   const updateCompany = async (id, updates) => {
     setCompanies((p) => p.map((c) => c.id === id ? { ...c, ...updates } : c));
     try {
