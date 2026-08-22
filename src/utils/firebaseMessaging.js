@@ -65,16 +65,15 @@ export async function setupFCMToken(user) {
       return { success: false, error: "Could not retrieve FCM token." };
     }
 
-    await setDoc(doc(db, "fcmTokens", user.id), {
-      token,
-      userId: user.id,
-      userName: user.name || "",
-      role: user.activeRole || user.role || "",
-      year: user.year || null,
-      sem: user.sem || null,
-      updatedAt: serverTimestamp(),
-    });
-
+   await setDoc(doc(db, "fcmTokens", user.id), {
+  token,
+  userId: user.id,
+  userName: user.name || "",
+  role: user.activeRole || user.role || "",
+  year: user.year || null,
+  semester: user.sem || null,   // ← was "sem", now matches notifications.py's query
+  updatedAt: serverTimestamp(),
+});
     return { success: true, token };
   } catch (err) {
     console.warn("setupFCMToken failed:", err.message);
