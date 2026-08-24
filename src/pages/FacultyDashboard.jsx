@@ -10,6 +10,7 @@ import {
   getSubjectAssessments, createAssessments, updateAssessmentMaxMarks,
   getStudentsByYearSem, getAllStudentProfiles,
   getMarksForAssessment, saveMarksBulk,
+  getAttendanceForYearSem, saveAttendanceBulk,
 } from "../utils/supabase";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
@@ -25,13 +26,6 @@ const YEARS = [
 
 const TABS = ["My Subjects", "Upload Notes", "Assignments", "Attendance", "Notice Board", "Gallery"];
 
-// ══════════════════════════════════════════════════════════
-// OPTION 1 — MANAGE SUBJECTS (catalog CRUD)
-// Add / edit / deactivate / restore subjects for a Year+Semester.
-// This is the shared catalog — changes here affect every faculty
-// member and every student in that Year+Semester, not just the
-// faculty member who made the change.
-// ══════════════════════════════════════════════════════════
 function SubjectCatalogModal({ initialYear, initialSem, onClose, onChanged }) {
   const [year, setYear] = useState(initialYear);
   const [sem, setSem] = useState(initialSem);
@@ -53,7 +47,7 @@ function SubjectCatalogModal({ initialYear, initialSem, onClose, onChanged }) {
   const [editError, setEditError] = useState("");
 
   const [rowBusyId, setRowBusyId] = useState(null);
-  const [rowMsg, setRowMsg] = useState({}); // { [id]: message }
+  const [rowMsg, setRowMsg] = useState({});
 
   const currentYearObj = YEARS.find((y) => y.label === year) || YEARS[0];
 
@@ -299,10 +293,6 @@ function SubjectCatalogModal({ initialYear, initialSem, onClose, onChanged }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════
-// OPTION 2 — MY TEACHING SUBJECTS — faculty self-selects subjects for
-// a Year+Semester from the shared subjects catalog. No admin step.
-// ══════════════════════════════════════════════════════════
 function ManageSubjectsModal({ facultyId, initialYear, initialSem, onClose, onSaved }) {
   const [year, setYear] = useState(initialYear);
   const [sem, setSem] = useState(initialSem);
@@ -424,8 +414,6 @@ function ManageSubjectsModal({ facultyId, initialYear, initialSem, onClose, onSa
   );
 }
 
-// ══════════════════════════════════════════════════════════
-
 export default function FacultyDashboard() {
   const { user, enrolledVersion } = useAuth();
   const {
@@ -434,6 +422,7 @@ export default function FacultyDashboard() {
     assignments, addAssignment, removeAssignment,
     notices, addNotice, removeNotice,
     gallery, addGalleryPhoto, removeGalleryPhoto,
+    notifyAcademicUpdate,
   } = useLMS();
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -442,10 +431,10 @@ export default function FacultyDashboard() {
   const [selectedSem, setSelectedSem] = useState("Sem 5");
   const [pdfViewer, setPdfViewer] = useState(null);
 
-  const [mySubjects, setMySubjects] = useState([]); // faculty_subjects rows joined with subjects
+  const [mySubjects, setMySubjects] = useState([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
-  const [manageOpen, setManageOpen] = useState(false);       // My Teaching Subjects
-  const [catalogOpen, setCatalogOpen] = useState(false);     // Manage Subjects (catalog CRUD)
+  const [manageOpen, setManageOpen] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
   const [marksModalSubjectRow, setMarksModalSubjectRow] = useState(null);
   const [quickJumpValue, setQuickJumpValue] = useState("");
 
@@ -473,6 +462,9 @@ export default function FacultyDashboard() {
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeTag, setNoticeTag] = useState("Notice");
+  const [noticeFile, setNoticeFile] = useState(null);
+  const [noticePosting, setNoticePosting] = useState(false);
+  const noticeFileRef = useRef(null);
 
   const [galleryCaption, setGalleryCaption] = useState("");
   const [galleryFile, setGalleryFile] = useState(null);
@@ -482,6 +474,12 @@ export default function FacultyDashboard() {
 
   const [allStudents, setAllStudents] = useState([]);
   const [semStudents, setSemStudents] = useState([]);
+
+  // ── ATTENDANCE (Supabase-backed) ─────────────────────────────
+  const [attendanceEdits, setAttendanceEdits] = useState({}); // {studentId: {subjectId: {attended, total}}} — values are STRINGS while editing
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [attendanceSaved, setAttendanceSaved] = useState("");
 
   const facultyId = user?.id;
 
@@ -506,6 +504,28 @@ export default function FacultyDashboard() {
   useEffect(() => {
     getStudentsByYearSem(selectedYear.label, selectedSem).then(setSemStudents);
   }, [selectedYear.label, selectedSem, enrolledVersion]);
+
+  // Loads existing saved attendance for this year/sem — stored as
+  // STRINGS in attendanceEdits so typing behaves the same whether the
+  // field started empty or was preloaded from the database.
+  useEffect(() => {
+    let cancelled = false;
+    setAttendanceLoading(true);
+    getAttendanceForYearSem(selectedYear.label, selectedSem).then((rows) => {
+      if (cancelled) return;
+      const edits = {};
+      rows.forEach((r) => {
+        if (!edits[r.student_id]) edits[r.student_id] = {};
+        edits[r.student_id][r.subject_id] = {
+          attended: String(r.attended_classes ?? ""),
+          total: String(r.total_classes ?? ""),
+        };
+      });
+      setAttendanceEdits(edits);
+      setAttendanceLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [selectedYear.label, selectedSem]);
 
   const STUDENTS = [...semStudents].sort((a, b) => {
     const av = sortBy === "usn" ? (a.usn || a.id || "") : (a.name || "");
@@ -540,14 +560,74 @@ export default function FacultyDashboard() {
     setAssignUploading(false);
   };
 
-  const handleUpdateAttendance = (stuId, stuName, subject, value) => {
-    updateAttendance(stuId, subject, value, stuName, selectedSem);
+  // Kept as raw strings while typing — converting/clamping here caused a
+  // lingering "0" to make new digits append instead of replace (typing
+  // "12" became "120"). Conversion to numbers happens only on save.
+  const handleAttendanceEdit = (studentId, subjectId, field, value) => {
+    setAttendanceEdits((p) => ({
+      ...p,
+      [studentId]: {
+        ...(p[studentId] || {}),
+        [subjectId]: {
+          ...(p[studentId]?.[subjectId] || { attended: "", total: "" }),
+          [field]: value,
+        },
+      },
+    }));
   };
 
-  const handlePostNotice = () => {
+  const handleSaveAndNotifyAttendance = async () => {
+    setAttendanceSaving(true);
+    const rows = [];
+    Object.entries(attendanceEdits).forEach(([studentId, subjectsMap]) => {
+      Object.entries(subjectsMap).forEach(([subjectId, vals]) => {
+        rows.push({
+          studentId, subjectId,
+          attendedClasses: Number(vals.attended) || 0,
+          totalClasses: Number(vals.total) || 0,
+          year: selectedYear.label, semLabel: selectedSem,
+        });
+      });
+    });
+
+    const res = await saveAttendanceBulk(rows, user?.name);
+    if (!res.ok) {
+      alert("Failed to save attendance: " + res.error);
+      setAttendanceSaving(false);
+      return;
+    }
+
+    await notifyAcademicUpdate({
+      title: `Attendance Updated — ${selectedSem}`,
+      body: `Your attendance has been updated for ${selectedSem}.`,
+      year: selectedYear.label,
+      semester: selectedSem,
+      postedBy: user?.name,
+      url: "/student",
+    });
+
+    setAttendanceSaved("✅ Attendance saved — students notified.");
+    setTimeout(() => setAttendanceSaved(""), 3000);
+    setAttendanceSaving(false);
+  };
+
+  // Notice can be posted as a plain message, or with an optional
+  // attachment (PDF, image, etc.) — addNotice uploads it to Cloudinary.
+  const handlePostNotice = async () => {
     if (!noticeTitle.trim()) return;
-    addNotice({ title: noticeTitle, content: noticeContent, tag: noticeTag, postedBy: user?.name, postedRole: "faculty" });
-    setNoticeTitle(""); setNoticeContent(""); setNoticeTag("Notice");
+    setNoticePosting(true);
+    try {
+      await addNotice(
+        { title: noticeTitle, content: noticeContent, tag: noticeTag, postedBy: user?.name, postedRole: "faculty" },
+        noticeFile
+      );
+      setNoticeTitle(""); setNoticeContent(""); setNoticeTag("Notice");
+      setNoticeFile(null);
+      if (noticeFileRef.current) noticeFileRef.current.value = "";
+    } catch (err) {
+      alert("Failed to post notice: " + err.message);
+    }
+    setNoticePosting(false);
   };
 
   const handleUploadGalleryPhoto = async () => {
@@ -821,7 +901,7 @@ export default function FacultyDashboard() {
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h3 className="text-[var(--color-text-primary)] font-semibold">📅 Attendance — {selectedSem}</h3>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button onClick={() => toggleSort("name")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer ${sortBy === "name" ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
                     Name {sortBy === "name" && (sortDir === "asc" ? "▲" : "▼")}
@@ -830,43 +910,66 @@ export default function FacultyDashboard() {
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer ${sortBy === "usn" ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
                     USN {sortBy === "usn" && (sortDir === "asc" ? "▲" : "▼")}
                   </button>
+                  <button onClick={handleSaveAndNotifyAttendance} disabled={attendanceSaving || mySubjects.length === 0}
+                    className="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white rounded-lg text-xs font-semibold cursor-pointer">
+                    {attendanceSaving ? "Saving..." : "🔔 Save & Notify Students"}
+                  </button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--color-border)]">
-                      <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4 min-w-32">Student</th>
-                      {subjectNames.map((s) => (
-                        <th key={s} className="text-[var(--color-text-secondary)] text-xs py-2 px-2 text-center min-w-24">{s}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {STUDENTS.map((stu) => (
-                      <tr key={stu.id} className="border-b border-[var(--color-border)]/50">
-                        <td className="py-3 pr-4">
-                          <p className="text-[var(--color-text-primary)] text-xs font-medium">{stu.name}</p>
-                          <p className="text-[var(--color-text-muted)] text-xs">{stu.usn || stu.id}</p>
-                        </td>
-                        {subjectNames.map((subject) => {
-                          const val = attendance[stu.id]?.[subject] ?? "";
-                          return (
-                            <td key={subject} className="py-3 px-2 text-center">
-                              <input type="number" min="0" max="100" value={val}
-                                onChange={(e) => handleUpdateAttendance(stu.id, stu.name, subject, Number(e.target.value))}
-                                className="w-16 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs text-center" />
-                            </td>
-                          );
-                        })}
+
+              {attendanceSaved && <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm">{attendanceSaved}</div>}
+
+              {attendanceLoading && <p className="text-[var(--color-text-muted)] text-sm">Loading attendance...</p>}
+
+              {!attendanceLoading && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-border)]">
+                        <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4 min-w-32">Student</th>
+                        {mySubjects.map((row) => (
+                          <th key={row.id} className="text-[var(--color-text-secondary)] text-xs py-2 px-2 text-center min-w-32">
+                            {row.subjects?.subject_name}
+                            <div className="text-[10px] font-normal opacity-70">Attended / Total</div>
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                    {STUDENTS.length === 0 && (
-                      <tr><td colSpan={99} className="py-6 text-center text-[var(--color-text-muted)] text-sm">No students found for {selectedSem}.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {STUDENTS.map((stu) => (
+                        <tr key={stu.id} className="border-b border-[var(--color-border)]/50">
+                          <td className="py-3 pr-4">
+                            <p className="text-[var(--color-text-primary)] text-xs font-medium">{stu.name}</p>
+                            <p className="text-[var(--color-text-muted)] text-xs">{stu.usn || stu.id}</p>
+                          </td>
+                          {mySubjects.map((row) => {
+                            const subjectId = row.subject_id;
+                            const vals = attendanceEdits[stu.id]?.[subjectId] || { attended: "", total: "" };
+                            return (
+                              <td key={subjectId} className="py-3 px-2 text-center">
+                                <div className="flex items-center gap-1 justify-center">
+                                  <input type="number" min="0" value={vals.attended}
+                                    onChange={(e) => handleAttendanceEdit(stu.id, subjectId, "attended", e.target.value)}
+                                    placeholder="0"
+                                    className="w-12 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-lg px-1 py-1.5 text-xs text-center" />
+                                  <span className="text-[var(--color-text-muted)] text-xs">/</span>
+                                  <input type="number" min="0" value={vals.total}
+                                    onChange={(e) => handleAttendanceEdit(stu.id, subjectId, "total", e.target.value)}
+                                    placeholder="0"
+                                    className="w-12 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-lg px-1 py-1.5 text-xs text-center" />
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                      {STUDENTS.length === 0 && (
+                        <tr><td colSpan={99} className="py-6 text-center text-[var(--color-text-muted)] text-sm">No students found for {selectedSem}.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -878,14 +981,31 @@ export default function FacultyDashboard() {
                   className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm" />
                 <textarea value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)} placeholder="Notice details..." rows={3}
                   className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm resize-none" />
+                <div onClick={() => noticeFileRef.current?.click()}
+                  className={`w-full border border-dashed rounded-xl p-3 flex items-center gap-3 cursor-pointer
+                    ${noticeFile ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]" : "border-[var(--color-border)]"}`}>
+                  <span className="text-xl">{noticeFile ? "📄" : "📎"}</span>
+                  <p className="text-[var(--color-text-secondary)] text-xs flex-1">
+                    {noticeFile ? noticeFile.name : "Attach a PDF, image, or other resource (optional) — or leave blank for a plain message"}
+                  </p>
+                  {noticeFile && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setNoticeFile(null); if (noticeFileRef.current) noticeFileRef.current.value = ""; }}
+                      className="text-[var(--color-text-muted)] hover:text-red-400 text-xs cursor-pointer flex-shrink-0">
+                      ✕
+                    </button>
+                  )}
+                  <input ref={noticeFileRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg"
+                    onChange={(e) => e.target.files[0] && setNoticeFile(e.target.files[0])} className="hidden" />
+                </div>
                 <div className="flex gap-3">
                   <select value={noticeTag} onChange={(e) => setNoticeTag(e.target.value)}
                     className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm cursor-pointer">
                     {["Notice", "Exam", "Event", "Holiday", "Urgent"].map((t) => <option key={t}>{t}</option>)}
                   </select>
-                  <button onClick={handlePostNotice} disabled={!noticeTitle.trim()}
+                  <button onClick={handlePostNotice} disabled={!noticeTitle.trim() || noticePosting}
                     className="flex-1 px-4 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer">
-                    📌 Post Notice
+                    {noticePosting ? "⏳ Posting..." : "📌 Post Notice"}
                   </button>
                 </div>
               </div>
@@ -893,9 +1013,15 @@ export default function FacultyDashboard() {
                 <h3 className="text-[var(--color-text-primary)] font-semibold">All Notices ({notices.length})</h3>
                 {notices.map((n) => (
                   <div key={n.id} className="flex items-start justify-between gap-3 p-4 bg-[var(--color-bg-surface-alt)] rounded-xl border-l-4 border-[var(--color-accent-solid)]">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="text-[var(--color-text-primary)] text-sm font-medium">{n.title}</p>
                       {n.content && <p className="text-[var(--color-text-secondary)] text-xs mt-1">{n.content}</p>}
+                      {n.fileUrl && (
+                        <a href={n.fileUrl} target="_blank" rel="noreferrer" download={n.fileName}
+                          className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs font-medium hover:opacity-80">
+                          📎 {n.fileName || "Attachment"}
+                        </a>
+                      )}
                     </div>
                     <button onClick={() => removeNotice(n.id)} className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer text-sm flex-shrink-0">🗑️</button>
                   </div>

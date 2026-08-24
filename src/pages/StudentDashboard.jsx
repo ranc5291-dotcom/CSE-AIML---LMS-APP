@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLMS, normalizeSubjectMarks } from "../context/LMSContext";
-import { getStudentMarksFull, getCatalogSubjects } from "../utils/supabase";
+import { getStudentMarksFull, getCatalogSubjects, getStudentAttendanceFull } from "../utils/supabase";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import PDFViewer from "../components/PDFViewer";
@@ -18,9 +18,6 @@ const ALL_SEMS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7",
 
 const DASHBOARD_TABS = ["Overview", "Notes & Subjects", "Placement", "Marks", "Attendance"];
 
-// getStudentMarksFull() expects a year LABEL ("3rd Year") alongside the sem
-// label ("Sem 5") — it does yearNumber()/semNumber() conversion internally.
-// This derives that year label from a sem label using the YEARS map above.
 function getYearForSem(semLabel) {
   const found = YEARS.find((y) => y.sems.includes(semLabel));
   return found ? found.label : null;
@@ -176,7 +173,6 @@ function PromotionPopup({ promo, onAcknowledge }) {
   );
 }
 
-// ── MARKS TAB — view-only, Supabase-backed ───────────────────────
 function MyMarksPanel({ marksSem, setMarksSem, userId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -317,6 +313,71 @@ function MyMarksPanel({ marksSem, setMarksSem, userId }) {
   );
 }
 
+function MyAttendancePanel({ attSem, setAttSem, userId }) {
+  const [loading, setLoading] = useState(true);
+  const [attData, setAttData] = useState({});
+
+  useEffect(() => {
+    if (!userId || !attSem) return;
+    let cancelled = false;
+    setLoading(true);
+    const yearLabel = getYearForSem(attSem);
+    if (!yearLabel) { setAttData({}); setLoading(false); return; }
+    getStudentAttendanceFull(userId, yearLabel, attSem).then((data) => {
+      if (!cancelled) { setAttData(data || {}); setLoading(false); }
+    });
+    return () => { cancelled = true; };
+  }, [userId, attSem]);
+
+  const subjectNames = Object.keys(attData);
+
+  return (
+    <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+      <div>
+        <h3 className="text-[var(--color-text-primary)] font-semibold mb-1">📅 My Attendance</h3>
+        <p className="text-[var(--color-text-muted)] text-xs">Select a semester to view your attendance.</p>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 max-w-md">
+        {ALL_SEMS.map((sem) => (
+          <button key={sem} onClick={() => setAttSem(sem)}
+            className={`px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer
+              ${attSem === sem ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
+            {sem}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p className="text-[var(--color-text-muted)] text-sm">Loading attendance…</p>}
+
+      {!loading && subjectNames.length === 0 && (
+        <p className="text-[var(--color-text-muted)] text-sm">No attendance recorded for {attSem} yet.</p>
+      )}
+
+      {!loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {subjectNames.map((subject) => {
+            const { attended, total, percentage } = attData[subject];
+            const scoreClass = percentage >= 75 ? "text-xl font-bold text-green-400" : percentage >= 60 ? "text-xl font-bold text-amber-400" : "text-xl font-bold text-red-400";
+            const barClass = percentage >= 75 ? "h-1.5 rounded-full bg-green-500" : percentage >= 60 ? "h-1.5 rounded-full bg-amber-500" : "h-1.5 rounded-full bg-red-500";
+            return (
+              <div key={subject} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3">
+                <p className="text-[var(--color-text-secondary)] text-xs mb-2 truncate">{subject}</p>
+                <p className={scoreClass}>{percentage}<span className="text-[var(--color-text-muted)] text-xs">%</span></p>
+                <p className="text-[var(--color-text-muted)] text-xs mt-0.5">{attended}/{total} classes</p>
+                <div className="mt-2 bg-[var(--color-border)] rounded-full h-1.5">
+                  <div className={barClass} style={{ width: `${Math.min(percentage, 100)}%` }} />
+                </div>
+                {percentage < 75 && <p className="text-red-400 text-xs mt-1">Below 75%</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const { user } = useAuth();
   const location = useLocation();
@@ -335,15 +396,11 @@ export default function StudentDashboard() {
   });
   const [selectedSem, setSelectedSem]   = useState(user?.sem || "Sem 5");
   const [marksSem, setMarksSem]         = useState(user?.sem || "Sem 5");
+  const [attSem, setAttSem]             = useState(user?.sem || "Sem 5");
   const [pdfViewer, setPdfViewer]       = useState(null);
   const [subjectPopup, setSubjectPopup] = useState(null);
   const [activePromo, setActivePromo]   = useState(null);
 
-  // ── SUBJECT CATALOG (Supabase — same source Manage Subjects writes
-  // to) — scoped to the student's currently-browsed Year + Semester.
-  // This replaces the old Firebase `subjects[sem]` list so newly
-  // added/edited/removed catalog subjects show up here immediately,
-  // without a separate student-side sync step.
   const [catalogSubjects, setCatalogSubjects] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
 
@@ -416,12 +473,12 @@ export default function StudentDashboard() {
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 3);
 
-   const allNotices = [
+  const allNotices = [
     ...(notices || []),
     ...(announcements || []),
   ]
     .filter((n) => {
-      const targetType = n.targetType || "global"; // old docs without the field = global, unchanged
+      const targetType = n.targetType || "global";
       if (targetType === "global") return true;
       return n.year === user?.year && n.semester === user?.sem;
     })
@@ -866,32 +923,7 @@ export default function StudentDashboard() {
           )}
 
           {activeTab === "Attendance" && (
-            <div className="space-y-4">
-              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
-                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">My Attendance</h3>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {Object.entries(myAttendance).length === 0 && (
-                    <p className="text-[var(--color-text-muted)] text-sm col-span-4">No attendance recorded yet.</p>
-                  )}
-                  {Object.entries(myAttendance).map(([subject, pct]) => {
-                    const scoreClass = Number(pct) >= 75 ? "text-xl font-bold text-green-400" : Number(pct) >= 60 ? "text-xl font-bold text-amber-400" : "text-xl font-bold text-red-400";
-                    const barClass = Number(pct) >= 75 ? "h-1.5 rounded-full bg-green-500" : Number(pct) >= 60 ? "h-1.5 rounded-full bg-amber-500" : "h-1.5 rounded-full bg-red-500";
-                    return (
-                      <div key={subject} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3">
-                        <p className="text-[var(--color-text-secondary)] text-xs mb-2 truncate">{subject}</p>
-                        <p className={scoreClass}>
-                          {pct}<span className="text-[var(--color-text-muted)] text-xs">%</span>
-                        </p>
-                        <div className="mt-2 bg-[var(--color-border)] rounded-full h-1.5">
-                          <div className={barClass} style={{ width: `${Math.min(Number(pct), 100)}%` }} />
-                        </div>
-                        {Number(pct) < 75 && <p className="text-red-400 text-xs mt-1">Below 75%</p>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <MyAttendancePanel attSem={attSem} setAttSem={setAttSem} userId={user?.id} />
           )}
 
         </main>

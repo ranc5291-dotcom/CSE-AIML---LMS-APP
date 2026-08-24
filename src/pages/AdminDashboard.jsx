@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth, getAllStudents, getAllFaculty, getAllPlacement, getAllAdmins } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
@@ -69,6 +69,9 @@ export default function AdminDashboard() {
   const [noticeTitle, setNoticeTitle]     = useState("");
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeTag, setNoticeTag]         = useState("Notice");
+  const [noticeFile, setNoticeFile]       = useState(null);
+  const [noticePosting, setNoticePosting] = useState(false);
+  const noticeFileRef = useRef(null);
 
   // Gallery
   const [galleryCaption, setGalleryCaption] = useState("");
@@ -177,18 +180,26 @@ export default function AdminDashboard() {
     setConfirmAction(null);
   };
 
-  const handlePostNotice = () => {
+  // Notice can be posted as a plain message, or with an optional
+  // attachment (PDF, image, etc.) — addNotice uploads it to Cloudinary,
+  // same as on the Faculty dashboard.
+  const handlePostNotice = async () => {
     if (!noticeTitle.trim()) return;
-    addNotice({
-      title: noticeTitle,
-      content: noticeContent,
-      tag: noticeTag,
-      postedBy: user?.name,
-      postedRole: "admin",
-    });
-    setNoticeTitle("");
-    setNoticeContent("");
-    setNoticeTag("Notice");
+    setNoticePosting(true);
+    try {
+      await addNotice(
+        { title: noticeTitle, content: noticeContent, tag: noticeTag, postedBy: user?.name, postedRole: "admin" },
+        noticeFile
+      );
+      setNoticeTitle("");
+      setNoticeContent("");
+      setNoticeTag("Notice");
+      setNoticeFile(null);
+      if (noticeFileRef.current) noticeFileRef.current.value = "";
+    } catch (err) {
+      alert("Failed to post notice: " + err.message);
+    }
+    setNoticePosting(false);
   };
 
   const handleUploadGalleryPhoto = async () => {
@@ -877,6 +888,23 @@ export default function AdminDashboard() {
                   rows={3}
                   className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm resize-none"
                 />
+                <div onClick={() => noticeFileRef.current?.click()}
+                  className={`w-full border border-dashed rounded-xl p-3 flex items-center gap-3 cursor-pointer
+                    ${noticeFile ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]" : "border-[var(--color-border)]"}`}>
+                  <span className="text-xl">{noticeFile ? "📄" : "📎"}</span>
+                  <p className="text-[var(--color-text-secondary)] text-xs flex-1">
+                    {noticeFile ? noticeFile.name : "Attach a PDF, image, or other resource (optional) — or leave blank for a plain message"}
+                  </p>
+                  {noticeFile && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setNoticeFile(null); if (noticeFileRef.current) noticeFileRef.current.value = ""; }}
+                      className="text-[var(--color-text-muted)] hover:text-red-400 text-xs cursor-pointer flex-shrink-0">
+                      ✕
+                    </button>
+                  )}
+                  <input ref={noticeFileRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg"
+                    onChange={(e) => e.target.files[0] && setNoticeFile(e.target.files[0])} className="hidden" />
+                </div>
                 <div className="flex gap-3">
                   <select
                     value={noticeTag}
@@ -887,10 +915,10 @@ export default function AdminDashboard() {
                   </select>
                   <button
                     onClick={handlePostNotice}
-                    disabled={!noticeTitle.trim()}
+                    disabled={!noticeTitle.trim() || noticePosting}
                     className="flex-1 px-4 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer"
                   >
-                    📌 Post Notice
+                    {noticePosting ? "⏳ Posting..." : "📌 Post Notice"}
                   </button>
                 </div>
               </div>
@@ -907,6 +935,12 @@ export default function AdminDashboard() {
                       </div>
                       <p className="text-[var(--color-text-primary)] text-sm font-medium">{n.title}</p>
                       {n.content && <p className="text-[var(--color-text-secondary)] text-xs mt-1">{n.content}</p>}
+                      {n.fileUrl && (
+                        <a href={n.fileUrl} target="_blank" rel="noreferrer" download={n.fileName}
+                          className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs font-medium hover:opacity-80">
+                          📎 {n.fileName || "Attachment"}
+                        </a>
+                      )}
                       <p className="text-[var(--color-text-muted)] text-xs mt-1">{n.date} {n.time} · Posted by {n.postedBy}</p>
                     </div>
                     <button onClick={() => removeNotice(n.id)}

@@ -20,8 +20,6 @@ const INITIAL_SUBJECTS = {
   "Sem 8": ["Research Methodology", "Entrepreneurship", "Project Phase II", "Elective"],
 };
 
-// Maps a sem label to its year label — used to auto-target notifications
-// and notices to the right students, without faculty selecting anything.
 const SEM_TO_YEAR = {
   "Sem 1": "1st Year", "Sem 2": "1st Year",
   "Sem 3": "2nd Year", "Sem 4": "2nd Year",
@@ -49,7 +47,6 @@ async function uploadToCloudinary(file) {
   };
 }
 
-// ── Marks helpers (exported — usable from any component) ──────
 export function normalizeSubjectMarks(subjectData) {
   if (!subjectData || typeof subjectData !== "object") return {};
   if ("scored" in subjectData || "total" in subjectData) {
@@ -194,7 +191,6 @@ export function LMSProvider({ children }) {
     return () => unsubs.forEach((u) => u());
   }, []);
 
-  // ── SUBJECTS ──────────────────────────────────────────────────
   const addSubject = async (sem, name) => {
     setSubjects((p) => ({ ...p, [sem]: [...(p[sem] || []), name] }));
     try {
@@ -238,7 +234,6 @@ export function LMSProvider({ children }) {
     } catch (e) { console.warn("setSubjectInternals:", e.message); }
   };
 
-  // ── NOTES — Cloudinary + Firestore, auto-targeted notice + push ──
   const addNote = async (noteData, file) => {
     let fileUrl = null, fileName = noteData.file || "", fileSize = noteData.size || "";
     if (file) {
@@ -253,7 +248,6 @@ export function LMSProvider({ children }) {
       date: new Date().toLocaleDateString(),
     });
 
-    // Persisted, in-app notice — auto-targeted to this note's year/sem.
     await addDoc(collection(db, "notices"), {
       title:      `New ${noteData.type} — ${noteData.subject}`,
       content:    `Uploaded for ${noteData.sem}`,
@@ -268,7 +262,6 @@ export function LMSProvider({ children }) {
       time:       new Date().toLocaleTimeString(),
     });
 
-    // Live push — only to devices whose fcmTokens doc matches this year/sem.
     sendNotification({
       title: `New ${noteData.type} — ${noteData.subject}`,
       body: `Uploaded for ${noteData.sem}`,
@@ -284,7 +277,6 @@ export function LMSProvider({ children }) {
     setNotes((p) => p.filter((n) => n.id !== id));
   };
 
-  // ── GALLERY — Cloudinary + Firestore, no blob fallback ──
   const addGalleryPhoto = async (photoData, file) => {
     let fileUrl = photoData.url || null;
     if (file) {
@@ -312,8 +304,14 @@ export function LMSProvider({ children }) {
     setGalleryFirestore((p) => p.filter((g) => g.id !== id));
   };
 
-  // ── NOTICES — targetType defaults to "global" for backward compat ──
-  const addNotice = async (notice) => {
+  // Notice can be a plain message, or carry an optional attachment
+  // (PDF, image, etc. — uploaded via Cloudinary, same as notes/gallery).
+  const addNotice = async (notice, file = null) => {
+    let fileUrl = null, fileName = null, fileSize = null;
+    if (file) {
+      const up = await uploadToCloudinary(file);
+      fileUrl = up.fileUrl; fileName = up.fileName; fileSize = up.fileSize;
+    }
     await addDoc(collection(db, "notices"), {
       title:      notice.title,
       content:    notice.content || "",
@@ -323,6 +321,7 @@ export function LMSProvider({ children }) {
       targetType: notice.targetType || "global",
       year:       notice.year || null,
       semester:   notice.semester || null,
+      fileUrl, fileName, fileSize,
       createdAt:  serverTimestamp(),
       date:       new Date().toLocaleDateString(),
       time:       new Date().toLocaleTimeString(),
@@ -338,7 +337,25 @@ export function LMSProvider({ children }) {
     setNotices((p) => p.filter((n) => n.id !== id));
   };
 
-  // ── ANNOUNCEMENTS — unchanged, always global ─────────────────
+  // Generic academic-targeted notification — persisted notice + push,
+  // both scoped to a year/sem. Used by Attendance's "Save & Notify"
+  // button; reusable for marks or anything similar later.
+  const notifyAcademicUpdate = async ({ title, body, year, semester, postedBy, url = "/" }) => {
+    await addDoc(collection(db, "notices"), {
+      title,
+      content:    body,
+      tag:        "Academic",
+      postedBy,
+      postedRole: "faculty",
+      targetType: "academic",
+      year, semester,
+      createdAt:  serverTimestamp(),
+      date:       new Date().toLocaleDateString(),
+      time:       new Date().toLocaleTimeString(),
+    });
+    sendNotification({ title, body, url, role: "student", year, semester });
+  };
+
   const addAnnouncement = async (a) => {
     await addDoc(collection(db, "announcements"), {
       title: a.title, tag: a.tag, postedBy: a.postedBy,
@@ -355,7 +372,9 @@ export function LMSProvider({ children }) {
     setAnnouncements((p) => p.filter((a) => a.id !== id));
   };
 
-  // ── ATTENDANCE ────────────────────────────────────────────────
+  // ── ATTENDANCE — legacy Firestore per-cell writer. No longer called
+  // by FacultyDashboard's Attendance tab (replaced by Supabase bulk
+  // save in supabase.js), left in place in case anything else uses it.
   const updateAttendance = async (studentId, subject, value, studentName = "", sem = "") => {
     setAttendance((p) => ({ ...p, [studentId]: { ...(p[studentId] || {}), [subject]: value } }));
     try {
@@ -376,7 +395,6 @@ export function LMSProvider({ children }) {
     } catch { try { await attendanceAPI.update(studentId, studentName, subject, sem, value); } catch {} }
   };
 
-  // ── MARKS (official, faculty-entered) ────────────────────────
   const updateMark = async (studentId, subject, internalLabel, scored, total = 100, studentName = "", sem = "") => {
     setMarks((p) => ({
       ...p,
@@ -474,7 +492,6 @@ export function LMSProvider({ children }) {
     setMarkSheetUploads((p) => p.filter((m) => m.id !== id));
   };
 
-  // ── ASSIGNMENTS — auto-targeted notice + push ────────────────
   const addAssignment = async (data, file = null) => {
     let fileUrl = null, fileName = null;
     if (file) {
@@ -511,7 +528,6 @@ export function LMSProvider({ children }) {
     setAssignments((p) => p.filter((a) => a.id !== id));
   };
 
-  // ── EVENTS ────────────────────────────────────────────────────
   const addEvent = async (event, organizer = "") => {
     await addDoc(collection(db, "events"), { ...event, organizer, joined: [], createdAt: serverTimestamp() });
   };
@@ -527,7 +543,6 @@ export function LMSProvider({ children }) {
     }));
   };
 
-  // ── COMPLAINTS ────────────────────────────────────────────────
   const addComplaint = async (c) => {
     await addDoc(collection(db, "complaints"), {
       ...c, status: "Pending",
@@ -544,7 +559,6 @@ export function LMSProvider({ children }) {
     setComplaints((p) => p.filter((c) => c.id !== id));
   };
 
-  // ── COMPANIES ─────────────────────────────────────────────────
   const addCompany = async (c) => {
     await addDoc(collection(db, "companies"), { ...c, createdAt: serverTimestamp() });
   };
@@ -570,23 +584,18 @@ export function LMSProvider({ children }) {
     }
   };
 
-  // ── FUND REQUESTS ─────────────────────────────────────────────
   const addFundRequest    = (req) => setFundRequests((p) => [{ ...req, id: Date.now(), status: "Active", date: new Date().toISOString().split("T")[0] }, ...p]);
   const removeFundRequest = (id)  => setFundRequests((p) => p.filter((r) => r.id !== id));
 
-  // ── SEM RESOURCES ─────────────────────────────────────────────
   const addSemResource    = (sem, res) => setSemResources((p) => ({ ...p, [sem]: [{ ...res, id: Date.now() }, ...(p[sem] || [])] }));
   const removeSemResource = (sem, id)  => setSemResources((p) => ({ ...p, [sem]: (p[sem] || []).filter((r) => r.id !== id) }));
 
-  // ── DSA ───────────────────────────────────────────────────────
   const addDsa    = async (d) => { await addDoc(collection(db, "dsa"), { ...d, createdAt: serverTimestamp() }); };
   const removeDsa = async (id) => { try { await deleteDoc(doc(db, "dsa", String(id))); } catch {} setDsaList((p) => p.filter((d) => d.id !== id)); };
 
-  // ── APTITUDE ──────────────────────────────────────────────────
   const addAptitude    = async (q) => { await addDoc(collection(db, "aptitude"), { ...q, createdAt: serverTimestamp() }); };
   const removeAptitude = async (id) => { try { await deleteDoc(doc(db, "aptitude", String(id))); } catch {} setAptitude((p) => p.filter((q) => q.id !== id)); };
 
-  // ── PLACEMENT UPLOADS — uses Supabase Storage, no blob-URL fallback ──
   const addPlacementUpload = async (item, file = null) => {
     let fileUrl  = item.fileUrl || null;
     let fileName = item.fileName || null;
@@ -628,7 +637,6 @@ export function LMSProvider({ children }) {
     setPlacementUploads((p) => p.filter((u) => u.id !== id));
   };
 
-  // ── PROMOTIONS ────────────────────────────────────────────────
   const addPromotion = async (promo) => {
     const payload = {
       studentId:   promo.studentId,
@@ -660,6 +668,7 @@ export function LMSProvider({ children }) {
       events, addEvent, removeEvent, joinEvent,
       notices, addNotice, removeNotice,
       announcements, addAnnouncement, removeAnnouncement,
+      notifyAcademicUpdate,
       gallery, addGalleryPhoto, removeGalleryPhoto,
       fundRequests, addFundRequest, removeFundRequest,
       semResources, addSemResource, removeSemResource,

@@ -703,3 +703,55 @@ export async function updateFundQR(file, updatedBy) {
   if (error) { console.warn("updateFundQR db:", error.message); return { ok: false, error: error.message }; }
   return { ok: true, qr_url };
 }
+
+export async function getAttendanceForYearSem(year, semLabel) {
+  const semN = semNumber(semLabel);
+  const yearN = yearNumber(year);
+  if (!semN || !yearN) return [];
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("*")
+    .eq("academic_year", yearN)
+    .eq("semester", semN);
+  if (error) { console.warn("getAttendanceForYearSem:", error.message); return []; }
+  return data || [];
+}
+
+export async function saveAttendanceBulk(rows, updatedBy) {
+  const payload = rows.map((r) => ({
+    student_id: r.studentId,
+    subject_id: r.subjectId,
+    academic_year: yearNumber(r.year),
+    semester: semNumber(r.semLabel),
+    attended_classes: r.attendedClasses,
+    total_classes: r.totalClasses,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  }));
+const { error } = await supabase
+  .from("attendance")
+  .upsert(payload, { onConflict: "student_id,subject_id,academic_year,semester" });
+  if (error) { console.warn("saveAttendanceBulk:", error.message); return { ok: false, error: error.message }; }
+  return { ok: true, count: payload.length };
+}
+export async function getStudentAttendanceFull(studentId, year, semLabel) {
+  const yearN = yearNumber(year);
+  const semN = semNumber(semLabel);
+  if (!yearN || !semN) return {};
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("*, subjects(*)")
+    .eq("student_id", studentId)
+    .eq("academic_year", yearN)
+    .eq("semester", semN);
+  if (error) { console.warn("getStudentAttendanceFull:", error.message); return {}; }
+  const result = {};
+  (data || []).forEach((row) => {
+    const name = row.subjects?.subject_name;
+    if (!name) return;
+    const attended = row.attended_classes || 0;
+    const total = row.total_classes || 0;
+    result[name] = { attended, total, percentage: total > 0 ? Math.round((attended / total) * 100) : 0 };
+  });
+  return result;
+}
