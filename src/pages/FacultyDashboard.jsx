@@ -481,6 +481,11 @@ export default function FacultyDashboard() {
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [attendanceSaved, setAttendanceSaved] = useState("");
 
+  // ── ATTENDANCE — bulk upload via CSV/XLSX ─────────────────────
+  const [uploadSubjectId, setUploadSubjectId] = useState("");
+  const [attendanceUploadMsg, setAttendanceUploadMsg] = useState("");
+  const attendanceUploadRef = useRef(null);
+
   const facultyId = user?.id;
 
   const loadMySubjects = async (year = selectedYear.label, sem = selectedSem) => {
@@ -525,6 +530,13 @@ export default function FacultyDashboard() {
       setAttendanceLoading(false);
     });
     return () => { cancelled = true; };
+  }, [selectedYear.label, selectedSem]);
+
+  // Reset the upload-target subject whenever the semester/subject list
+  // changes, so we never silently apply an upload to a stale subject.
+  useEffect(() => {
+    setUploadSubjectId("");
+    setAttendanceUploadMsg("");
   }, [selectedYear.label, selectedSem]);
 
   const STUDENTS = [...semStudents].sort((a, b) => {
@@ -574,6 +586,87 @@ export default function FacultyDashboard() {
         },
       },
     }));
+  };
+
+  // ── ATTENDANCE — bulk upload helpers ──────────────────────────
+  // Downloads a ready-to-fill spreadsheet for the currently visible
+  // students: Name, USN, Attended, Total. Faculty fill in Attended/Total
+  // and re-upload it — matching happens by USN (falls back to Name).
+  const handleDownloadAttendanceTemplate = () => {
+    const rows = STUDENTS.length > 0
+      ? STUDENTS.map((s) => ({ Name: s.name, USN: s.usn || s.id, Attended: "", Total: "" }))
+      : [{ Name: "", USN: "", Attended: "", Total: "" }];
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 24 }, { wch: 16 }, { wch: 10 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+    XLSX.writeFile(wb, `Attendance_Template_${selectedSem.replace(/\s+/g, "_")}.xlsx`);
+  };
+
+  // Reads an uploaded .xlsx/.xls/.csv sheet with columns Name, USN,
+  // Attended, Total and fills the on-screen Attended/Total inputs for the
+  // chosen subject — it does NOT save to the database by itself. Faculty
+  // still review the filled-in table and hit "Save & Notify Students".
+  const handleAttendanceFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!uploadSubjectId) {
+      alert("Please select which subject this sheet is for, first.");
+      if (attendanceUploadRef.current) attendanceUploadRef.current.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        let matched = 0;
+        const unmatched = [];
+
+        rows.forEach((row) => {
+          // Accept a few common header variants/casings.
+          const usnRaw = String(row.USN ?? row.usn ?? row.Usn ?? "").trim();
+          const nameRaw = String(row.Name ?? row.name ?? "").trim();
+          const attendedRaw = row.Attended ?? row.attended ?? row["Attended Classes"] ?? "";
+          const totalRaw = row.Total ?? row.total ?? row["Total Classes"] ?? "";
+
+          if (!usnRaw && !nameRaw) return; // skip blank rows
+
+          let student = STUDENTS.find(
+            (s) => String(s.usn || s.id || "").trim().toLowerCase() === usnRaw.toLowerCase()
+          );
+          if (!student && nameRaw) {
+            student = STUDENTS.find(
+              (s) => String(s.name || "").trim().toLowerCase() === nameRaw.toLowerCase()
+            );
+          }
+
+          if (!student) {
+            unmatched.push(usnRaw || nameRaw);
+            return;
+          }
+
+          handleAttendanceEdit(student.id, uploadSubjectId, "attended", String(attendedRaw).trim());
+          handleAttendanceEdit(student.id, uploadSubjectId, "total", String(totalRaw).trim());
+          matched++;
+        });
+
+        setAttendanceUploadMsg(
+          unmatched.length > 0
+            ? `✅ Matched ${matched} student(s). ⚠️ Could not match by USN/Name: ${unmatched.join(", ")}`
+            : `✅ Matched ${matched} student(s). Review the values below, then Save & Notify Students.`
+        );
+        setTimeout(() => setAttendanceUploadMsg(""), 10000);
+      } catch (err) {
+        alert("Could not read that file. Please make sure it follows the template format (Name, USN, Attended, Total).");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    if (attendanceUploadRef.current) attendanceUploadRef.current.value = "";
   };
 
   const handleSaveAndNotifyAttendance = async () => {
@@ -915,6 +1008,53 @@ export default function FacultyDashboard() {
                     {attendanceSaving ? "Saving..." : "🔔 Save & Notify Students"}
                   </button>
                 </div>
+              </div>
+
+              {/* Bulk upload — fill Attended/Total for a subject from a spreadsheet */}
+              <div className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
+                <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider">
+                  📎 Bulk upload from spreadsheet
+                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex-1 min-w-48">
+                    <label className="text-[var(--color-text-muted)] text-xs block mb-1.5">Subject this sheet is for</label>
+                    <select
+                      value={uploadSubjectId}
+                      onChange={(e) => setUploadSubjectId(e.target.value)}
+                      disabled={mySubjects.length === 0}
+                      className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm cursor-pointer disabled:opacity-40"
+                    >
+                      <option value="">— Select Subject —</option>
+                      {mySubjects.map((row) => (
+                        <option key={row.subject_id} value={row.subject_id}>{row.subjects?.subject_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button onClick={handleDownloadAttendanceTemplate} disabled={STUDENTS.length === 0}
+                    className="px-4 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] hover:bg-[var(--color-bg-hover)] disabled:opacity-40 text-[var(--color-text-primary)] rounded-xl text-xs font-medium cursor-pointer whitespace-nowrap">
+                    ⬇️ Download Template
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!uploadSubjectId) { alert("Please select which subject this sheet is for, first."); return; }
+                      attendanceUploadRef.current?.click();
+                    }}
+                    disabled={mySubjects.length === 0}
+                    className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-xs font-medium cursor-pointer whitespace-nowrap">
+                    ⬆️ Upload Sheet
+                  </button>
+                  <input ref={attendanceUploadRef} type="file" accept=".csv,.xlsx,.xls"
+                    onChange={handleAttendanceFileUpload} className="hidden" />
+                </div>
+                <p className="text-[var(--color-text-muted)] text-[11px] leading-relaxed">
+                  Template columns: <span className="text-[var(--color-text-secondary)] font-medium">Name, USN, Attended, Total</span>.
+                  Download the template first — it's pre-filled with the students for {selectedSem}. Fill in Attended and Total,
+                  then upload it back here. Students are matched by USN (falls back to Name if USN doesn't match).
+                  This only fills the table below — nothing is saved until you click "Save &amp; Notify Students".
+                </p>
+                {attendanceUploadMsg && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-300 text-xs">{attendanceUploadMsg}</div>
+                )}
               </div>
 
               {attendanceSaved && <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm">{attendanceSaved}</div>}

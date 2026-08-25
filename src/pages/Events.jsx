@@ -17,6 +17,8 @@ export default function Events() {
   const { events, addEvent, removeEvent, joinEvent } = useLMS();
 
   const isFaculty = user?.role === "faculty" || user?.role === "admin";
+  const isStudent = user?.role === "student";
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showForm, setShowForm]     = useState(false);
   const [success, setSuccess]       = useState("");
@@ -28,6 +30,8 @@ export default function Events() {
   // ── Join modal (captures optional note before registering) ──
   const [joinModalEvent, setJoinModalEvent] = useState(null);
   const [joinNote, setJoinNote] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const [joining, setJoining] = useState(false);
 
   const handleAddEvent = () => {
     if (!newEvent.title.trim() || !newEvent.date) {
@@ -41,25 +45,33 @@ export default function Events() {
     setTimeout(() => setSuccess(""), 4000);
   };
 
+  // Students only. Once joined, there is no way to unjoin from here —
+  // they must contact the faculty member who hosted the event.
   const handleJoin = (event) => {
+    if (!isStudent) return;
     const alreadyJoined = event.joined.includes(user?.id);
-    if (alreadyJoined) {
-      // Leaving — no note needed, no new registration row.
-      joinEvent(event.id, user?.id);
-      return;
-    }
+    if (alreadyJoined) return;
+
     if (event.googleFormUrl) {
       window.open(event.googleFormUrl, "_blank");
     }
     setJoinModalEvent(event);
     setJoinNote("");
+    setJoinError("");
   };
 
-  const confirmJoin = () => {
+  const confirmJoin = async () => {
     if (!joinModalEvent) return;
+    setJoining(true);
+    setJoinError("");
     // Pass the full user object (name/usn/sem) + note so the registration
     // row can capture who joined and why.
-    joinEvent(joinModalEvent.id, user, joinNote);
+    const result = await joinEvent(joinModalEvent.id, user, joinNote);
+    setJoining(false);
+    if (!result.ok) {
+      setJoinError(result.error || "Could not join the event. Please try again.");
+      return;
+    }
     setJoinModalEvent(null);
     setJoinNote("");
   };
@@ -195,15 +207,23 @@ export default function Events() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[var(--color-text-muted)] text-xs">👥 {e.joined.length} joined</span>
-                    <button onClick={() => handleJoin(e)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer
-                        ${joined
-                          ? "bg-green-600/20 border border-green-500/30 text-green-400 hover:bg-red-600/20 hover:text-red-400 hover:border-red-500/30"
-                          : "bg-[var(--color-accent-solid)] hover:opacity-90 text-white"}`}>
-                      {joined ? "✅ Joined (click to leave)" : e.googleFormUrl ? "📋 Join & Register →" : "Join Event →"}
-                    </button>
+                  <div className="flex items-center justify-between pt-1 gap-3">
+                    <span className="text-[var(--color-text-muted)] text-xs flex-shrink-0">👥 {e.joined.length} joined</span>
+
+                    {/* Only students see a join control. Faculty/admin/placement
+                        never see a Join button at all. */}
+                    {isStudent && (
+                      joined ? (
+                        <span className="px-4 py-2 rounded-xl text-xs font-semibold bg-green-600/20 border border-green-500/30 text-green-400 text-right">
+                          ✅ You have joined — contact {e.organizer} to cancel
+                        </span>
+                      ) : (
+                        <button onClick={() => handleJoin(e)}
+                          className="px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer bg-[var(--color-accent-solid)] hover:opacity-90 text-white flex-shrink-0">
+                          {e.googleFormUrl ? "📋 Join & Register →" : "Join Event →"}
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
               );
@@ -222,6 +242,9 @@ export default function Events() {
               <p className="text-[var(--color-text-secondary)] text-xs mt-1">
                 {user?.name} · {user?.usn || user?.id} · {user?.sem || "—"}
               </p>
+              <p className="text-[var(--color-text-muted)] text-xs mt-2">
+                Once you join, you won't be able to cancel here — contact {joinModalEvent.organizer} if you need to withdraw.
+              </p>
             </div>
 
             <div>
@@ -237,14 +260,20 @@ export default function Events() {
               />
             </div>
 
+            {joinError && (
+              <p className="text-red-400 text-xs">{joinError}</p>
+            )}
+
             <div className="flex gap-3">
-              <button onClick={() => setJoinModalEvent(null)}
-                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer">
+              <button onClick={() => { setJoinModalEvent(null); setJoinError(""); }}
+                disabled={joining}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer disabled:opacity-50">
                 Cancel
               </button>
               <button onClick={confirmJoin}
-                className="flex-1 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold cursor-pointer">
-                Confirm Join
+                disabled={joining}
+                className="flex-1 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold cursor-pointer disabled:opacity-50">
+                {joining ? "Joining..." : "Confirm Join"}
               </button>
             </div>
           </div>

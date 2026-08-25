@@ -536,30 +536,38 @@ export function LMSProvider({ children }) {
     setEvents((p) => p.filter((e) => e.id !== id));
   };
 
-  // eventId: the event's doc id.
-  // userOrId: either the FULL user object (name/usn/sem — passed when
-  //   actually joining, so we can save a registration row) or just a
-  //   plain user id string (passed when leaving — no registration needed).
-  // note: optional note captured in the Join modal, only used on join.
-  const joinEvent = async (eventId, userOrId, note = "") => {
-    const uid = (typeof userOrId === "object" && userOrId !== null) ? userOrId.id : userOrId;
-    const event = events.find((e) => e.id === eventId);
-    const alreadyJoined = event ? (event.joined || []).includes(uid) : false;
-
-    setEvents((p) => p.map((e) => {
-      if (e.id !== eventId) return e;
-      const isJoined = (e.joined || []).includes(uid);
-      return {
-        ...e,
-        joined: isJoined ? e.joined.filter((x) => x !== uid) : [...(e.joined || []), uid],
-      };
-    }));
-
-    // Only save a Supabase registration row when actually joining (not
-    // leaving) and when the full user object was passed in.
-    if (!alreadyJoined && typeof userOrId === "object" && userOrId !== null) {
-      await saveEventRegistration(eventId, event?.title || "", userOrId, note, event?.tag || null);
+  // ── JOIN EVENT ──
+  // Students only. One join per student per event — enforced client-side
+  // here AND server-side by a unique constraint on
+  // event_registrations(event_id, student_id) in Supabase, so this can
+  // never produce a duplicate registration even under a race condition.
+  // There is no "leave"/"unjoin" path: once a student has joined, they
+  // must contact the faculty member who hosted the event (event.organizer)
+  // to be removed.
+  //
+  // user: the FULL user object (must include id, name, role, usn, sem).
+  // note: optional note captured in the Join modal.
+  // Returns { ok: true } on success, or { ok: false, error } on failure —
+  // callers should surface `error` to the user rather than assuming success.
+  const joinEvent = async (eventId, user, note = "") => {
+    if (!user || user.role !== "student") {
+      return { ok: false, error: "Only students can join events." };
     }
+
+    const event = events.find((e) => e.id === eventId);
+    const alreadyJoined = event ? (event.joined || []).includes(user.id) : false;
+    if (alreadyJoined) {
+      return { ok: false, error: "You have already joined this event." };
+    }
+
+    const result = await saveEventRegistration(eventId, event?.title || "", user, note, event?.tag || null);
+    if (!result.ok) return result;
+
+    setEvents((p) => p.map((e) =>
+      e.id === eventId ? { ...e, joined: [...(e.joined || []), user.id] } : e
+    ));
+
+    return { ok: true };
   };
 
   const addComplaint = async (c) => {

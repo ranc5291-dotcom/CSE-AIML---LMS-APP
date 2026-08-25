@@ -91,21 +91,41 @@ export async function saveAttendance(studentId, studentName, subject, sem, perce
   } catch (e) { console.warn("saveAttendance failed", e); }
 }
 
+// ══════════════════════════════════════════════════════════
+// EVENT REGISTRATIONS
+// - Only students may register (enforced here, server-side).
+// - One registration per (event_id, student_id) — enforced by a
+//   unique constraint in Postgres (event_registrations_event_student_unique).
+//   A duplicate insert returns Postgres error code 23505, which we
+//   translate into a friendly "already joined" message below.
 // eventCategory is the event's tag (Technical/Cultural/Sports/etc.) so the
 // admin dashboard can group/filter registrations by category.
+// ══════════════════════════════════════════════════════════
 export async function saveEventRegistration(eventId, eventTitle, user, note = "", eventCategory = null) {
-  try {
-    await supabase.from("event_registrations").insert({
-      event_id:       String(eventId),
-      event_title:    eventTitle,
-      event_category: eventCategory || null,
-      student_name:   user.name,
-      student_id:     user.id,
-      usn:            user.usn || user.id,
-      semester:       user.sem || null,
-      note:           note || null,
-    });
-  } catch (e) { console.warn("saveEventRegistration failed", e); }
+  if (!user || user.role !== "student") {
+    return { ok: false, error: "Only students can join events." };
+  }
+
+  const { error } = await supabase.from("event_registrations").insert({
+    event_id:       String(eventId),
+    event_title:    eventTitle,
+    event_category: eventCategory || null,
+    student_name:   user.name,
+    student_id:     user.id,
+    usn:            user.usn || user.id,
+    semester:       user.sem || null,
+    note:           note || null,
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: "You have already joined this event." };
+    }
+    console.warn("saveEventRegistration failed", error.message);
+    return { ok: false, error: "Could not register for the event. Please try again." };
+  }
+
+  return { ok: true };
 }
 
 // Admin analytics — joined counts grouped by semester (optionally for one event)
@@ -133,6 +153,11 @@ export async function getAllEventRegistrations() {
     .order("created_at", { ascending: false });
   if (error) { console.warn("getAllEventRegistrations:", error.message); return []; }
   return data || [];
+}
+export async function deleteEventRegistration(id) {
+  const { error } = await supabase.from("event_registrations").delete().eq("id", id);
+  if (error) { console.warn("deleteEventRegistration:", error.message); return { ok: false, error: error.message }; }
+  return { ok: true };
 }
 
 // ── NOTES: upload file to Supabase Storage + save metadata to DB ──

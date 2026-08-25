@@ -3,8 +3,7 @@ import { useAuth, getAllStudents, getAllFaculty, getAllPlacement, getAllAdmins }
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
-import { getAllUserRoles, getEventRegistrationSummary, getAllEventRegistrations } from "../utils/supabase";
-
+import { getAllUserRoles, getEventRegistrationSummary, getAllEventRegistrations, deleteEventRegistration } from "../utils/supabase";
 const TABS = ["Overview", "Student Management", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Events", "Announcements", "Notice Board", "Gallery"];
 const ALL_ROLES = ["student", "faculty", "admin", "placement"];
 const ROLE_LABELS_MAP = { student: "Student", faculty: "Faculty", admin: "Admin", placement: "Placement" };
@@ -97,6 +96,20 @@ export default function AdminDashboard() {
   const [eventFilterCategory, setEventFilterCategory] = useState("All");
   const [eventFilterYear, setEventFilterYear]         = useState("All");
   const [eventFilterSem, setEventFilterSem]           = useState("All");
+
+  // Events tab — remove a single registration
+  const [confirmRemoveReg, setConfirmRemoveReg] = useState(null);
+
+  const handleRemoveRegistration = async () => {
+    if (!confirmRemoveReg) return;
+    const result = await deleteEventRegistration(confirmRemoveReg.id);
+    if (result.ok) {
+      setEventRegistrations((prev) => prev.filter((r) => r.id !== confirmRemoveReg.id));
+    } else {
+      alert("Failed to remove registration: " + result.error);
+    }
+    setConfirmRemoveReg(null);
+  };
 
   useEffect(() => {
     getAllStudents().then(setStudents);
@@ -298,12 +311,12 @@ export default function AdminDashboard() {
       if (group.length === 0) return;
       rows.push([`--- ${year} / ${sem} ---`]);
       group.forEach((s) => {
-        const log = loginLog.find((l) => l.id === s.id);
+        const log = loginLog.find((l) => l.user_id === s.id);
         rows.push([
           s.usn || s.id, s.name, s.branch || "CSEAIML",
           s.year, s.sem, s.email || "", s.phone || "",
           s.status || "active",
-          log ? new Date(log.loginTime).toLocaleString() : "Never",
+          log && log.logged_in_at ? new Date(log.logged_in_at).toLocaleString() : "Never",
         ]);
       });
     });
@@ -312,11 +325,11 @@ export default function AdminDashboard() {
     rows.push(["=== FACULTY ==="]);
     rows.push(["ID", "Name", "Branch", "Subject", "Email", "Phone", "Last Login"]);
     faculty.forEach((f) => {
-      const log = loginLog.find((l) => l.id === f.id);
+      const log = loginLog.find((l) => l.user_id === f.id);
       rows.push([
         f.id, f.name, f.branch || "CSEAIML", f.subject || "",
         f.email || "", f.phone || "",
-        log ? new Date(log.loginTime).toLocaleString() : "Never",
+        log && log.logged_in_at ? new Date(log.logged_in_at).toLocaleString() : "Never",
       ]);
     });
 
@@ -324,11 +337,11 @@ export default function AdminDashboard() {
     rows.push(["=== PLACEMENT OFFICERS ==="]);
     rows.push(["ID", "Name", "Dept", "Email", "Phone", "Last Login"]);
     placement.forEach((p) => {
-      const log = loginLog.find((l) => l.id === p.id);
+      const log = loginLog.find((l) => l.user_id === p.id);
       rows.push([
         p.id, p.name, p.dept || "CSEAIML",
         p.email || "", p.phone || "",
-        log ? new Date(log.loginTime).toLocaleString() : "Never",
+        log && log.logged_in_at ? new Date(log.logged_in_at).toLocaleString() : "Never",
       ]);
     });
 
@@ -336,19 +349,19 @@ export default function AdminDashboard() {
     rows.push(["=== ADMINS ==="]);
     rows.push(["ID", "Name", "Dept", "Email", "Phone", "Last Login"]);
     admins.forEach((a) => {
-      const log = loginLog.find((l) => l.id === a.id);
+      const log = loginLog.find((l) => l.user_id === a.id);
       rows.push([
         a.id, a.name, a.dept || "CSEAIML",
         a.email || "", a.phone || "",
-        log ? new Date(log.loginTime).toLocaleString() : "Never",
+        log && log.logged_in_at ? new Date(log.logged_in_at).toLocaleString() : "Never",
       ]);
     });
 
     rows.push([]);
     rows.push(["=== ALL LOGIN LOG (most recent first) ==="]);
-    rows.push(["ID", "Name", "Role", "Branch/Dept", "Email", "Phone", "Login Time"]);
+    rows.push(["User ID", "Name", "Role", "USN", "Login Time"]);
     loginLog.forEach((l) => {
-      rows.push([l.id, l.name, l.role, l.branch, l.email, l.phone, new Date(l.loginTime).toLocaleString()]);
+      rows.push([l.user_id, l.user_name, l.role, l.usn, l.logged_in_at ? new Date(l.logged_in_at).toLocaleString() : ""]);
     });
 
     const csv = rows.map((r) =>
@@ -475,8 +488,8 @@ export default function AdminDashboard() {
                         {l.role === "student" ? "🎓" : l.role === "faculty" ? "👨‍🏫" : l.role === "placement" ? "💼" : "🛡️"}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{l.name}</p>
-                        <p className="text-[var(--color-text-muted)] text-xs">{l.email || l.phone} · {l.branch}</p>
+                        <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{l.user_name}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">{l.usn}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <span className={`text-xs px-2 py-0.5 rounded-full capitalize
@@ -487,7 +500,10 @@ export default function AdminDashboard() {
                           {l.role}
                         </span>
                         <p className="text-[var(--color-text-muted)] text-xs mt-0.5">
-                          {l.loginTime ? new Date(l.loginTime).toLocaleTimeString() : ""}
+                          {l.logged_in_at ? new Date(l.logged_in_at).toLocaleDateString() : ""}
+                        </p>
+                        <p className="text-[var(--color-text-muted)] text-xs">
+                          {l.logged_in_at ? new Date(l.logged_in_at).toLocaleTimeString() : ""}
                         </p>
                       </div>
                     </div>
@@ -634,7 +650,7 @@ export default function AdminDashboard() {
                 <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">👨‍🏫 Faculty Members ({faculty.length})</h3>
                 <div className="space-y-3">
                   {faculty.map((f) => {
-                    const logEntry = loginLog.find((l) => l.id === f.id);
+                    const logEntry = loginLog.find((l) => l.user_id === f.id);
                     return (
                       <div key={f.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-4 border border-[var(--color-border)]">
                         <div className="flex items-start gap-3">
@@ -657,7 +673,7 @@ export default function AdminDashboard() {
                             {logEntry ? (
                               <>
                                 <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full">🟢 Logged in</span>
-                                <p className="text-[var(--color-text-muted)] text-xs mt-1">{new Date(logEntry.loginTime).toLocaleString()}</p>
+                                <p className="text-[var(--color-text-muted)] text-xs mt-1">{logEntry.logged_in_at ? new Date(logEntry.logged_in_at).toLocaleString() : ""}</p>
                               </>
                             ) : (
                               <span className="text-xs px-2 py-0.5 bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] rounded-full">Never logged in</span>
@@ -680,7 +696,7 @@ export default function AdminDashboard() {
                 <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">💼 Placement Officers ({placement.length})</h3>
                 <div className="space-y-3">
                   {placement.map((p) => {
-                    const logEntry = loginLog.find((l) => l.id === p.id);
+                    const logEntry = loginLog.find((l) => l.user_id === p.id);
                     return (
                       <div key={p.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-4 border border-[var(--color-border)]">
                         <div className="flex items-start gap-3">
@@ -702,7 +718,7 @@ export default function AdminDashboard() {
                             {logEntry ? (
                               <>
                                 <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full">🟢 Logged in</span>
-                                <p className="text-[var(--color-text-muted)] text-xs mt-1">{new Date(logEntry.loginTime).toLocaleString()}</p>
+                                <p className="text-[var(--color-text-muted)] text-xs mt-1">{logEntry.logged_in_at ? new Date(logEntry.logged_in_at).toLocaleString() : ""}</p>
                               </>
                             ) : (
                               <span className="text-xs px-2 py-0.5 bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] rounded-full">Never logged in</span>
@@ -720,7 +736,7 @@ export default function AdminDashboard() {
                 <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">🛡️ Admins ({admins.length})</h3>
                 <div className="space-y-3">
                   {admins.map((a) => {
-                    const logEntry = loginLog.find((l) => l.id === a.id);
+                    const logEntry = loginLog.find((l) => l.user_id === a.id);
                     return (
                       <div key={a.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-4 border border-[var(--color-border)]">
                         <div className="flex items-start gap-3">
@@ -742,7 +758,7 @@ export default function AdminDashboard() {
                             {logEntry ? (
                               <>
                                 <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full">🟢 Logged in</span>
-                                <p className="text-[var(--color-text-muted)] text-xs mt-1">{new Date(logEntry.loginTime).toLocaleString()}</p>
+                                <p className="text-[var(--color-text-muted)] text-xs mt-1">{logEntry.logged_in_at ? new Date(logEntry.logged_in_at).toLocaleString() : ""}</p>
                               </>
                             ) : (
                               <span className="text-xs px-2 py-0.5 bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] rounded-full">Never logged in</span>
@@ -933,13 +949,19 @@ export default function AdminDashboard() {
                         </div>
                         {r.note && <p className="text-[var(--color-text-muted)] text-xs mt-1">📝 {r.note}</p>}
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-[var(--color-text-muted)] text-xs">
-                          {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
-                        </p>
-                        <p className="text-[var(--color-text-muted)] text-xs">
-                          {r.created_at ? new Date(r.created_at).toLocaleTimeString() : ""}
-                        </p>
+                      <div className="text-right flex-shrink-0 flex flex-col items-end gap-2">
+                        <div>
+                          <p className="text-[var(--color-text-muted)] text-xs">
+                            {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
+                          </p>
+                          <p className="text-[var(--color-text-muted)] text-xs">
+                            {r.created_at ? new Date(r.created_at).toLocaleTimeString() : ""}
+                          </p>
+                        </div>
+                        <button onClick={() => setConfirmRemoveReg(r)}
+                          className="text-[var(--color-text-muted)] hover:text-red-400 transition-colors cursor-pointer text-xs">
+                          🗑️ Remove
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1127,6 +1149,32 @@ export default function AdminDashboard() {
 
         </main>
       </div>
+
+      {/* Confirm Remove Registration Modal */}
+      {confirmRemoveReg && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[var(--color-text-primary)] font-bold text-lg mb-2">Remove Registration</h3>
+            <p className="text-[var(--color-text-secondary)] text-sm mb-2">
+              Remove <span className="text-[var(--color-text-primary)] font-medium">{confirmRemoveReg.student_name}</span>'s registration for{" "}
+              <span className="text-[var(--color-text-primary)] font-medium">{confirmRemoveReg.event_title}</span>?
+            </p>
+            <p className="text-[var(--color-text-muted)] text-xs mb-6">
+              This only removes their event registration — it does not affect their account or other data.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmRemoveReg(null)}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={handleRemoveRegistration}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Action Modal */}
       {confirmAction && (

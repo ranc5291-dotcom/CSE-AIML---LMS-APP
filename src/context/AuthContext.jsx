@@ -400,7 +400,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase
       .from("login_logs")
       .select("*")
-      .order("created_at", { ascending: false })
+      .order("logged_in_at", { ascending: false })
       .limit(200);
     if (error) { console.warn("getLoginLog failed", error); return []; }
     return data || [];
