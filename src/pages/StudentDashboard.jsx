@@ -382,7 +382,7 @@ export default function StudentDashboard() {
   const { user } = useAuth();
   const location = useLocation();
   const {
-    notes, attendance, marks,
+    notes, attendance,
     assignments, announcements, notices,
     companies, dsaList, placementUploads,
     events, gallery,
@@ -444,7 +444,6 @@ export default function StudentDashboard() {
   };
 
   const myAttendance = attendance[user?.id] || {};
-  const myMarks      = marks[user?.id] || {};
 
   const avgAttendance = Object.values(myAttendance).length
     ? Math.round(
@@ -452,19 +451,6 @@ export default function StudentDashboard() {
         Object.values(myAttendance).length
       )
     : 0;
-
-  const subjectPctList = Object.values(myMarks).map((subjectData) => {
-    const internalsObj = normalizeSubjectMarks(subjectData);
-    const entries = Object.values(internalsObj);
-    if (entries.length === 0) return 0;
-    const totalScored = entries.reduce((s, v) => s + (Number(v.scored) || 0), 0);
-    const totalMax = entries.reduce((s, v) => s + (Number(v.total) || 100), 0);
-    return totalMax > 0 ? totalScored / totalMax : 0;
-  });
-
-  const avgMarks = subjectPctList.length
-    ? ((subjectPctList.reduce((a, b) => a + b, 0) / subjectPctList.length) * 10).toFixed(1)
-    : "0.0";
 
   const myAssignments  = assignments.filter((a) => a.sem === user?.sem);
   const openCompanies  = companies.filter((c) => c.status === "Open");
@@ -493,9 +479,9 @@ export default function StudentDashboard() {
     else alert(`"${fileName}" - Ask faculty to re-upload this file.`);
   };
 
+  // CGPA stat removed — Overview now shows Attendance, Pending Assignments, and Open Drives.
   const STATS = [
     { label: "Attendance",          value: `${avgAttendance}%`, color: "from-blue-500 to-cyan-500",    onClick: () => setActiveTab("Attendance") },
-    { label: "CGPA",                value: avgMarks,             color: "from-violet-500 to-purple-500", onClick: () => setActiveTab("Marks") },
     { label: "Pending Assignments", value: myAssignments.length, color: "from-amber-500 to-orange-500", onClick: () => setActiveTab("Notes & Subjects") },
     { label: "Open Drives",         value: openCompanies.length, color: "from-rose-500 to-pink-500",    onClick: () => setActiveTab("Placement") },
   ];
@@ -537,7 +523,7 @@ export default function StudentDashboard() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {STATS.map((stat) => (
               <button key={stat.label} onClick={stat.onClick} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 text-left cursor-pointer hover:border-[var(--color-text-muted)] transition-all">
                 <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-lg mb-3`}></div>
