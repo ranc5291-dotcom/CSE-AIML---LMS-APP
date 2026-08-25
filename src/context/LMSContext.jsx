@@ -5,7 +5,7 @@ import {
   doc, serverTimestamp, query, orderBy, updateDoc,
 } from "firebase/firestore";
 import { attendanceAPI, marksAPI, sendNotification } from "../utils/api";
-import { uploadPlacementFile, deletePlacementFile } from "../utils/supabase";
+import { uploadPlacementFile, deletePlacementFile, saveEventRegistration } from "../utils/supabase";
 
 const LMSContext = createContext(null);
 
@@ -535,12 +535,31 @@ export function LMSProvider({ children }) {
     try { await deleteDoc(doc(db, "events", String(id))); } catch {}
     setEvents((p) => p.filter((e) => e.id !== id));
   };
-  const joinEvent = async (eventId, userId) => {
+
+  // eventId: the event's doc id.
+  // userOrId: either the FULL user object (name/usn/sem — passed when
+  //   actually joining, so we can save a registration row) or just a
+  //   plain user id string (passed when leaving — no registration needed).
+  // note: optional note captured in the Join modal, only used on join.
+  const joinEvent = async (eventId, userOrId, note = "") => {
+    const uid = (typeof userOrId === "object" && userOrId !== null) ? userOrId.id : userOrId;
+    const event = events.find((e) => e.id === eventId);
+    const alreadyJoined = event ? (event.joined || []).includes(uid) : false;
+
     setEvents((p) => p.map((e) => {
       if (e.id !== eventId) return e;
-      const already = (e.joined || []).includes(userId);
-      return { ...e, joined: already ? e.joined.filter((x) => x !== userId) : [...(e.joined || []), userId] };
+      const isJoined = (e.joined || []).includes(uid);
+      return {
+        ...e,
+        joined: isJoined ? e.joined.filter((x) => x !== uid) : [...(e.joined || []), uid],
+      };
     }));
+
+    // Only save a Supabase registration row when actually joining (not
+    // leaving) and when the full user object was passed in.
+    if (!alreadyJoined && typeof userOrId === "object" && userOrId !== null) {
+      await saveEventRegistration(eventId, event?.title || "", userOrId, note, event?.tag || null);
+    }
   };
 
   const addComplaint = async (c) => {

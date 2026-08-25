@@ -91,16 +91,48 @@ export async function saveAttendance(studentId, studentName, subject, sem, perce
   } catch (e) { console.warn("saveAttendance failed", e); }
 }
 
-export async function saveEventRegistration(eventId, eventTitle, user) {
+// eventCategory is the event's tag (Technical/Cultural/Sports/etc.) so the
+// admin dashboard can group/filter registrations by category.
+export async function saveEventRegistration(eventId, eventTitle, user, note = "", eventCategory = null) {
   try {
     await supabase.from("event_registrations").insert({
-      event_id:     String(eventId),
-      event_title:  eventTitle,
-      student_name: user.name,
-      student_id:   user.id,
-      usn:          user.usn || user.id,
+      event_id:       String(eventId),
+      event_title:    eventTitle,
+      event_category: eventCategory || null,
+      student_name:   user.name,
+      student_id:     user.id,
+      usn:            user.usn || user.id,
+      semester:       user.sem || null,
+      note:           note || null,
     });
   } catch (e) { console.warn("saveEventRegistration failed", e); }
+}
+
+// Admin analytics — joined counts grouped by semester (optionally for one event)
+export async function getEventRegistrationSummary(eventId = null) {
+  let q = supabase.from("event_registrations").select("semester, event_id, event_title");
+  if (eventId) q = q.eq("event_id", String(eventId));
+  const { data, error } = await q;
+  if (error) { console.warn("getEventRegistrationSummary:", error.message); return []; }
+
+  const counts = {};
+  (data || []).forEach((r) => {
+    const sem = r.semester || "Unknown";
+    counts[sem] = (counts[sem] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([semester, count]) => ({ semester, count }))
+    .sort((a, b) => a.semester.localeCompare(b.semester, undefined, { numeric: true }));
+}
+
+// Admin — full raw list of who joined what (name, USN, semester, category, note)
+export async function getAllEventRegistrations() {
+  const { data, error } = await supabase
+    .from("event_registrations")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) { console.warn("getAllEventRegistrations:", error.message); return []; }
+  return data || [];
 }
 
 // ── NOTES: upload file to Supabase Storage + save metadata to DB ──

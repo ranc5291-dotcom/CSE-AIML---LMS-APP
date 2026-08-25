@@ -3,9 +3,9 @@ import { useAuth, getAllStudents, getAllFaculty, getAllPlacement, getAllAdmins }
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
-import { getAllUserRoles } from "../utils/supabase";
+import { getAllUserRoles, getEventRegistrationSummary, getAllEventRegistrations } from "../utils/supabase";
 
-const TABS = ["Overview", "Student Management", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Announcements", "Notice Board", "Gallery"];
+const TABS = ["Overview", "Student Management", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Events", "Announcements", "Notice Board", "Gallery"];
 const ALL_ROLES = ["student", "faculty", "admin", "placement"];
 const ROLE_LABELS_MAP = { student: "Student", faculty: "Faculty", admin: "Admin", placement: "Placement" };
 const SEM_SEQUENCE = [
@@ -31,6 +31,10 @@ const SORT_OPTIONS = [
   { key: "sem",  label: "Semester" },
   { key: "status", label: "Status" },
 ];
+
+// Sem label -> Year label, derived from SEM_SEQUENCE (used to filter/show
+// year on the Events tab, since event_registrations only stores semester).
+const SEM_TO_YEAR_MAP = Object.fromEntries(SEM_SEQUENCE.map(({ year, sem }) => [sem, year]));
 
 export default function AdminDashboard() {
   const { user, updateStudentStatus, promoteStudent, detainStudent, removeStudent, getLoginLog, enrolledVersion, manageUserRoles } = useAuth();
@@ -84,6 +88,16 @@ export default function AdminDashboard() {
   const [admins, setAdmins]       = useState([]);
   const [loginLog, setLoginLog]   = useState([]);
 
+  // Event registrations grouped by semester (Admin analytics)
+  const [eventRegSummary, setEventRegSummary] = useState([]);
+
+  // Events tab — full raw registration list + filters
+  const [eventRegistrations, setEventRegistrations] = useState([]);
+  const [eventSearch, setEventSearch]               = useState("");
+  const [eventFilterCategory, setEventFilterCategory] = useState("All");
+  const [eventFilterYear, setEventFilterYear]         = useState("All");
+  const [eventFilterSem, setEventFilterSem]           = useState("All");
+
   useEffect(() => {
     getAllStudents().then(setStudents);
     getAllFaculty().then(setFaculty);
@@ -98,6 +112,8 @@ export default function AdminDashboard() {
       });
       setUserRolesMap(map);
     });
+    getEventRegistrationSummary().then(setEventRegSummary);
+    getAllEventRegistrations().then(setEventRegistrations);
   }, [enrolledVersion]);
 
   const filteredStudents = students.filter((s) => {
@@ -128,6 +144,23 @@ export default function AdminDashboard() {
   const dropoutStudents  = students.filter((s) => s.status === "dropout").length;
   const detainedStudents = students.filter((s) => s.status === "detained").length;
   const openComplaints   = complaints.filter((c) => c.status === "Pending").length;
+
+  // Events tab — derived filter options + filtered rows
+  const eventCategories = Array.from(
+    new Set(eventRegistrations.map((r) => r.event_category).filter(Boolean))
+  );
+
+  const filteredEventRegs = eventRegistrations.filter((r) => {
+    const q = eventSearch.trim().toLowerCase();
+    const matchSearch = !q ||
+      r.student_name?.toLowerCase().includes(q) ||
+      r.usn?.toLowerCase().includes(q) ||
+      r.event_title?.toLowerCase().includes(q);
+    const matchCategory = eventFilterCategory === "All" || r.event_category === eventFilterCategory;
+    const matchYear      = eventFilterYear === "All" || SEM_TO_YEAR_MAP[r.semester] === eventFilterYear;
+    const matchSem        = eventFilterSem === "All" || r.semester === eventFilterSem;
+    return matchSearch && matchCategory && matchYear && matchSem;
+  });
 
   const handleAction = (studentId, action) => {
     const labels = {
@@ -412,6 +445,22 @@ export default function AdminDashboard() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Event joins by semester */}
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">🎉 Event Joins by Semester</h3>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {eventRegSummary.length === 0 && (
+                    <p className="text-[var(--color-text-muted)] text-sm col-span-4">No event registrations yet.</p>
+                  )}
+                  {eventRegSummary.map((r) => (
+                    <div key={r.semester} className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3 flex items-center justify-between">
+                      <p className="text-[var(--color-text-secondary)] text-xs font-medium">{r.semester}</p>
+                      <span className="text-[var(--color-text-primary)] font-bold text-lg">{r.count}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -825,6 +874,77 @@ export default function AdminDashboard() {
                   <p className="text-[var(--color-text-muted)] text-xs mt-2">— {c.by} · {c.date}</p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── EVENTS ── */}
+          {activeTab === "Events" && (
+            <div className="space-y-5">
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 space-y-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <input
+                    value={eventSearch}
+                    onChange={(e) => setEventSearch(e.target.value)}
+                    placeholder="🔍 Search by name, USN, or event..."
+                    className="flex-1 min-w-48 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2 text-[var(--color-text-primary)] text-sm placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)]"
+                  />
+                  <select value={eventFilterCategory} onChange={(e) => setEventFilterCategory(e.target.value)}
+                    className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer">
+                    <option value="All">All Categories</option>
+                    {eventCategories.map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                  <select value={eventFilterYear} onChange={(e) => setEventFilterYear(e.target.value)}
+                    className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer">
+                    <option value="All">All Years</option>
+                    {["1st Year","2nd Year","3rd Year","4th Year"].map((y) => <option key={y}>{y}</option>)}
+                  </select>
+                  <select value={eventFilterSem} onChange={(e) => setEventFilterSem(e.target.value)}
+                    className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer">
+                    <option value="All">All Sems</option>
+                    {["Sem 1","Sem 2","Sem 3","Sem 4","Sem 5","Sem 6","Sem 7","Sem 8"].map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <p className="text-[var(--color-text-muted)] text-xs">Showing {filteredEventRegs.length} of {eventRegistrations.length} registrations</p>
+              </div>
+
+              <div className="space-y-3">
+                {filteredEventRegs.length === 0 && (
+                  <div className="text-center py-10 text-[var(--color-text-muted)]">
+                    <p className="text-4xl mb-2">🎫</p>
+                    <p className="text-sm">No event registrations found.</p>
+                  </div>
+                )}
+                {filteredEventRegs.map((r) => (
+                  <div key={r.id} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <p className="text-[var(--color-text-primary)] font-semibold text-sm">{r.student_name}</p>
+                          {r.event_category && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)]">
+                              {r.event_category}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)]">
+                          <span>🪪 {r.usn}</span>
+                          <span>📚 {SEM_TO_YEAR_MAP[r.semester] || "—"} · {r.semester || "—"}</span>
+                          <span>🎉 {r.event_title}</span>
+                        </div>
+                        {r.note && <p className="text-[var(--color-text-muted)] text-xs mt-1">📝 {r.note}</p>}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-[var(--color-text-muted)] text-xs">
+                          {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
+                        </p>
+                        <p className="text-[var(--color-text-muted)] text-xs">
+                          {r.created_at ? new Date(r.created_at).toLocaleTimeString() : ""}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
