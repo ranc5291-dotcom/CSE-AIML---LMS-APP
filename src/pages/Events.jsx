@@ -25,6 +25,10 @@ export default function Events() {
     venue: "", tag: "Technical", googleFormUrl: "",
   });
 
+  // ── Join modal (captures optional note before registering) ──
+  const [joinModalEvent, setJoinModalEvent] = useState(null);
+  const [joinNote, setJoinNote] = useState("");
+
   const handleAddEvent = () => {
     if (!newEvent.title.trim() || !newEvent.date) {
       alert("Title and date are required.");
@@ -38,10 +42,26 @@ export default function Events() {
   };
 
   const handleJoin = (event) => {
+    const alreadyJoined = event.joined.includes(user?.id);
+    if (alreadyJoined) {
+      // Leaving — no note needed, no new registration row.
+      joinEvent(event.id, user?.id);
+      return;
+    }
     if (event.googleFormUrl) {
       window.open(event.googleFormUrl, "_blank");
     }
-    joinEvent(event.id, user?.id);
+    setJoinModalEvent(event);
+    setJoinNote("");
+  };
+
+  const confirmJoin = () => {
+    if (!joinModalEvent) return;
+    // Pass the full user object (name/usn/sem) + note so the registration
+    // row can capture who joined and why.
+    joinEvent(joinModalEvent.id, user, joinNote);
+    setJoinModalEvent(null);
+    setJoinNote("");
   };
 
   return (
@@ -192,6 +212,44 @@ export default function Events() {
 
         </main>
       </div>
+
+      {/* Join Event modal — captures the student's optional note before registering */}
+      {joinModalEvent && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div>
+              <h3 className="text-[var(--color-text-primary)] font-bold text-lg">Join "{joinModalEvent.title}"</h3>
+              <p className="text-[var(--color-text-secondary)] text-xs mt-1">
+                {user?.name} · {user?.usn || user?.id} · {user?.sem || "—"}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">
+                Note <span className="text-[var(--color-text-muted)]">(optional)</span>
+              </label>
+              <textarea
+                value={joinNote}
+                onChange={(e) => setJoinNote(e.target.value)}
+                placeholder="Anything the organizer should know..."
+                rows={3}
+                className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setJoinModalEvent(null)}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={confirmJoin}
+                className="flex-1 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                Confirm Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
