@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LMSProvider } from "./context/LMSContext";
 import { useFCM } from "./hooks/useFCM";
+import { PWAInstallProvider } from "./hooks/usePWAInstall";
 import Login from "./pages/Login";
 import SplashScreen from "./components/SplashScreen";
 import StudentDashboard from "./pages/StudentDashboard";
@@ -122,12 +123,14 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <LMSProvider>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
-      </LMSProvider>
-    </AuthProvider>
+    <PWAInstallProvider>
+      <AuthProvider>
+        <LMSProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </LMSProvider>
+      </AuthProvider>
+    </PWAInstallProvider>
   );
 }

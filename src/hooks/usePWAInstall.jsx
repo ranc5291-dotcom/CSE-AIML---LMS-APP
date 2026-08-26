@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 
 function isIosSafari() {
   const ua = window.navigator.userAgent;
@@ -14,7 +14,15 @@ function isRunningStandalone() {
   );
 }
 
-export function usePWAInstall() {
+const PWAInstallContext = createContext(null);
+
+// This provider must be mounted as early as possible (at the App root,
+// outside any splash-screen/route gating) because the browser fires
+// `beforeinstallprompt` very early on page load — often within the first
+// second. If the listener attaches late (e.g. only when a button component
+// finally mounts after a splash delay), the event has already fired and is
+// lost, permanently hiding the install button for that page load.
+export function PWAInstallProvider({ children }) {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(() => isRunningStandalone());
@@ -62,10 +70,17 @@ export function usePWAInstall() {
     return choice;
   }, [deferredPrompt]);
 
-  return {
-    isInstallable,
-    isInstalled,
-    isIos,
-    promptInstall,
-  };
+  return (
+    <PWAInstallContext.Provider value={{ isInstallable, isInstalled, isIos, promptInstall }}>
+      {children}
+    </PWAInstallContext.Provider>
+  );
+}
+
+export function usePWAInstall() {
+  const ctx = useContext(PWAInstallContext);
+  if (!ctx) {
+    throw new Error("usePWAInstall must be used within a PWAInstallProvider");
+  }
+  return ctx;
 }
