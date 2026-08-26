@@ -6,11 +6,13 @@ import {
   firebaseChangePassword,
   firebaseLogout,
   onAuthChange,
+  getIdToken,
 } from "../utils/firebase";
 import { supabase, logLogin, clearSupabaseUserData, getUserRoles, setUserRoles } from "../utils/supabase";
 import { removeFCMToken } from "../utils/firebaseMessaging";
 import { clearFirestoreUserData } from "../utils/clearAccountData";
 
+const API_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const AuthContext = createContext(null);
 
@@ -424,11 +426,36 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
-  // ── CLEAR ACCOUNT DATA (wipes Firestore + Supabase data for this user) ──
+  // ── DELETE FIREBASE AUTH ACCOUNT (server-side, via FastAPI+firebase-admin) ──
+  // Sends the current session's ID token so the backend can verify the
+  // request is really coming from an authenticated user, plus the
+  // profile's uid (== the original registration Firebase account) in case
+  // the current session is a phone-OTP login under a different identity.
+  const deleteFirebaseAuthAccount = useCallback(async (profileUid) => {
+    try {
+      const idToken = await getIdToken();
+      const res = await fetch(`${API_URL}/account/delete-account`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ profile_uid: profileUid }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Failed to delete authentication account.");
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }, []);
+
+  // ── CLEAR ACCOUNT DATA (wipes Firestore + Supabase data, deletes the
+  // Firebase Auth account, and signs out — for ALL roles) ──────────
   const clearAccountData = useCallback(async () => {
     if (!user?.id) return { success: false, error: "No authenticated user." };
     const uid = user.id, role = user.role;
-    const result = { firestore: { ok: true }, supabase: { ok: true } };
+    const result = { firestore: { ok: true }, supabase: { ok: true }, auth: { ok: true } };
 
     try { await clearFirestoreUserData(uid); }
     catch (err) { result.firestore = { ok: false, error: err.message }; }
@@ -436,10 +463,19 @@ export function AuthProvider({ children }) {
     try { await clearSupabaseUserData(uid, role); }
     catch (err) { result.supabase = { ok: false, error: err.message }; }
 
-    const success = result.firestore.ok && result.supabase.ok;
-    if (success) { try { await logout(); } catch {} } // force a clean reload
+    // Delete the Firebase Auth account itself last, after the profile row
+    // is already gone — this way, even if something below fails partway,
+    // the person can't be left in the old "profile deleted but login still
+    // works" state that this whole fix targets.
+    const authResult = await deleteFirebaseAuthAccount(uid);
+    if (!authResult.ok) result.auth = { ok: false, error: authResult.error };
+
+    const success = result.firestore.ok && result.supabase.ok && result.auth.ok;
+    // Sign out regardless of partial failure, so a half-cleared account
+    // never leaves an active session sitting on the old dashboard.
+    try { await logout(); } catch {}
     return { success, details: result };
-  }, [user, logout]);
+  }, [user, logout, deleteFirebaseAuthAccount]);
 
   // ══════════════════════════════════════════════════════════
   // MULTI-ROLE ACCESS

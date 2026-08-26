@@ -89,6 +89,16 @@ export async function verifyOTP(otp) {
   await updatePassword(user, newPassword);
 }
 
+// ── Account Deletion (used by Clear Account Data) ──────────────
+// Returns a fresh ID token for the currently signed-in Firebase user,
+// to be sent to the backend so it can verify the request server-side
+// before deleting the Auth account. Throws if nobody is signed in.
+export async function getIdToken() {
+  const user = auth.currentUser;
+  if (!user) throw new Error("No authenticated Firebase user.");
+  return user.getIdToken(true); // force refresh, in case the cached token is stale
+}
+
 // ── Auth State Listener ───────────────────────────────────────
 export function onAuthChange(callback) {
   return onAuthStateChanged(auth, callback);

@@ -6,6 +6,7 @@ from routers.notes import router as notes_router
 from routers.assignments import router as assignments_router
 from routers.attendance_marks import attendance_router, marks_router
 from routers.email_otp import router as email_otp_router
+from routers.account import router as account_router
 from routers.other_routers import (
     complaints_router,
     announcements_router,
@@ -44,6 +45,7 @@ app.include_router(notifications_router)
 app.include_router(announcements_router)
 app.include_router(events_router)
 app.include_router(companies_router)
+app.include_router(account_router)
 
 
 # ── HEALTH CHECK ──────────────────────────────────────────────

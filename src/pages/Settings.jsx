@@ -358,12 +358,12 @@ function DangerZoneSection({ clearAccountData }) {
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 max-w-md w-full space-y-4">
-            {status === "success" ? (
+                        {status === "success" ? (
               <>
-                <h3 className="text-[var(--color-text-primary)] font-semibold text-lg">Account Data Cleared</h3>
+                <h3 className="text-[var(--color-text-primary)] font-semibold text-lg">Account Deleted</h3>
                 <p className="text-[var(--color-text-secondary)] text-sm">
-                  Your application data has been successfully removed from Firestore and Supabase.
-                  Your login account remains active — you'll be signed out now; log back in to see a fresh account.
+                  Your account and all associated data have been permanently deleted, including your login
+                  credentials. You'll need to register again with a new or the same email to use the app.
                 </p>
                 <button onClick={() => setShowModal(false)}
                   className="w-full px-4 py-2.5 bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] text-white rounded-xl text-sm font-semibold cursor-pointer">
@@ -374,10 +374,9 @@ function DangerZoneSection({ clearAccountData }) {
               <>
                 <h3 className="text-red-500 font-semibold text-lg">Clear Account Data?</h3>
                 <p className="text-[var(--color-text-secondary)] text-sm">
-                  This will permanently delete your application data from Firestore and Supabase.
-                  This action cannot be undone.
+                  This will permanently delete your application data and your login account. You will not be
+                  able to sign back in with this email — you'll need to register as a new user.
                 </p>
-
                 {status === "error" && (
                   <div className="rounded-xl px-4 py-3 text-sm border bg-red-500/10 border-red-500/30 text-red-500">
                     Some account data could not be cleared. Please try again.
