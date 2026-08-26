@@ -601,7 +601,8 @@ export async function getStudentMarksFull(studentId, year, semLabel) {
 }
 
 // ══════════════════════════════════════════════════════════
-// CLEAR ACCOUNT DATA — deletes only Supabase rows owned by `uid`.
+// CLEAR ACCOUNT DATA — deletes Supabase rows owned by `uid`,
+// including the profiles row and any granted extra roles.
 // ══════════════════════════════════════════════════════════
 
 const USER_OWNED_TABLES = [
@@ -626,6 +627,22 @@ export async function clearSupabaseUserData(uid, role) {
   for (const { table, column } of tables) {
     const { error } = await supabase.from(table).delete().eq(column, uid);
     if (error) errors.push(`${table}: ${error.message}`);
+  }
+
+  // Extra roles granted via user_roles (multi-role access). Cleared for
+  // every role, not just faculty, since any role can be granted extras.
+  const { error: rolesErr } = await supabase.from("user_roles").delete().eq("user_id", uid);
+  if (rolesErr) errors.push(`user_roles: ${rolesErr.message}`);
+
+  // The profiles row itself — deleted LAST, after every table that
+  // references profiles.id above has already been cleared, and only
+  // once those succeed (see below). Without this, the profile survives
+  // even after the Firebase Auth account is deleted, and registerUser()'s
+  // duplicate email/USN check finds it and blocks re-registration with
+  // the same email — breaking the entire "clear then register fresh" flow.
+  if (errors.length === 0) {
+    const { error: profileErr } = await supabase.from("profiles").delete().eq("id", uid);
+    if (profileErr) errors.push(`profiles: ${profileErr.message}`);
   }
 
   if (errors.length > 0) {
