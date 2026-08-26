@@ -446,6 +446,9 @@ export function AuthProvider({ children }) {
       if (!res.ok) throw new Error(data.detail || "Failed to delete authentication account.");
       return { ok: true };
     } catch (err) {
+      // TEMP DEBUG: surface the real failure reason instead of swallowing it.
+      // Remove this console.error once the root cause is confirmed and fixed.
+      console.error("deleteFirebaseAuthAccount failed:", err);
       return { ok: false, error: err.message };
     }
   }, []);
