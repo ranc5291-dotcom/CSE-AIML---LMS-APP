@@ -9,3 +9,5 @@ bcrypt
 firebase-admin
 cloudinary
 python-multipart
+email-validator
+requests

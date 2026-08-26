@@ -663,9 +663,9 @@ export default function Login() {
       <div className="w-full max-w-md z-10">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 mb-4 shadow-lg shadow-blue-500/30 overflow-hidden">
-           <img src="/icons/icon-192.png" alt="CSEAIML LMS" className="w-full h-full object-cover" />
+           <img src="/icons/icon-192.png" alt="CSE(AIML) LMS" className="w-full h-full object-cover" />
             </div>
-          <h1 className="text-3xl font-bold text-[var(--color-text-primary)] tracking-tight">CSEAIML LMS</h1>
+          <h1 className="text-3xl font-bold text-[var(--color-text-primary)] tracking-tight">CSE(AIML) LMS</h1>
           <p className="text-[var(--color-text-secondary)] mt-1 text-sm">Learning Management System</p>
           <div className="mt-4">
             <InstallAppButton />
@@ -721,7 +721,7 @@ export default function Login() {
             </>
           )}
         </div>
-        <p className="text-center text-[var(--color-text-muted)] text-xs mt-4">CSEAIML Department · Academic Portal</p>
+        <p className="text-center text-[var(--color-text-muted)] text-xs mt-4">CSE(AIML) Department · Academic Portal</p>
       </div>
     </div>
   );

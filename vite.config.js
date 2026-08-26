@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'CSEAIML LMS',
-        short_name: 'CSEAIML LMS',
+        name: 'CSE(AIML) LMS',
+        short_name: 'CSE(AIML) LMS',
         description: 'CSEAIML Department Learning Management System',
         theme_color: '#0f172a',      // matches your gray-950 background
         background_color: '#0f172a',
