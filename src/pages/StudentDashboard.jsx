@@ -755,7 +755,7 @@ export default function StudentDashboard() {
                     return (
                       <div key={note.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] overflow-hidden hover:border-[var(--color-text-muted)] transition-all">
                         <div className="flex items-center gap-3 p-3">
-                          <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center text-lg flex-shrink-0"></div>
+                          <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center text-lg flex-shrink-0">📕</div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
                             <p className="text-[var(--color-text-muted)] text-xs">
@@ -804,8 +804,8 @@ export default function StudentDashboard() {
                         {c.description && <p className="text-[var(--color-text-secondary)] text-xs">{c.description}</p>}
                         {c.eligibility && (
                           <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
-                            <p className="text-blue-300 text-xs font-semibold mb-0.5">Eligibility</p>
-                            <p className="text-blue-200 text-xs">{c.eligibility}</p>
+                            <p className="text-blue-700 dark:text-blue-300 text-xs font-semibold mb-0.5">Eligibility</p>
+                            <p className="text-blue-700/80 dark:text-blue-200 text-xs">{c.eligibility}</p>
                           </div>
                         )}
                         <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)]">

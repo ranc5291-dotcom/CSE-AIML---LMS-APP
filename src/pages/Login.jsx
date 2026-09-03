@@ -35,14 +35,26 @@ function toE164(val) {
 
 // ── Reusable input ────────────────────────────────────────────
 function Field({ label, type = "text", value, onChange, placeholder, onKeyDown, required, disabled }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPasswordType = type === "password";
+  const inputType = isPasswordType && showPassword ? "text" : type;
+
   return (
     <div>
       <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
-      <input type={type} value={value} onChange={onChange} placeholder={placeholder}
-        onKeyDown={onKeyDown} disabled={disabled}
-        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 text-sm disabled:opacity-60" />
+      <div className="relative">
+        <input type={inputType} value={value} onChange={onChange} placeholder={placeholder}
+          onKeyDown={onKeyDown} disabled={disabled}
+          className={`w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 text-sm disabled:opacity-60 ${isPasswordType ? "pr-10" : ""}`} />
+        {isPasswordType && (
+          <button type="button" onClick={() => setShowPassword((s) => !s)} tabIndex={-1}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer text-sm">
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -522,6 +534,7 @@ function SignInForm({ role, prefilledId, onRegister }) {
 
   const [identifier, setIdentifier] = useState(prefilledId || "");
   const [password, setPassword]     = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp]               = useState("");
   const [otpSent, setOtpSent]       = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -589,10 +602,16 @@ function SignInForm({ role, prefilledId, onRegister }) {
       {!phoneDetected && (
         <div>
           <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            placeholder="Enter your password"
-            className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 text-sm" />
+          <div className="relative">
+            <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              placeholder="Enter your password"
+              className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-3 pr-10 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 text-sm" />
+            <button type="button" onClick={() => setShowPassword((s) => !s)} tabIndex={-1}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer text-sm">
+              {showPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
           <button onClick={() => setShowForgot(true)}
             className="text-blue-400 hover:text-blue-300 text-xs mt-1.5 cursor-pointer transition-colors">
             Forgot password?

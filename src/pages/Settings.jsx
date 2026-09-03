@@ -18,19 +18,31 @@ const SECTIONS = ["Account & Profile", "Appearance", "Help & Support", "Danger Z
 
 // ── Reusable input ────────────────────────────────────────────
 function Field({ label, type = "text", value, onChange, placeholder, disabled }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPasswordType = type === "password";
+  const inputType = isPasswordType && showPassword ? "text" : type;
+
   return (
     <div>
       <label className="text-[var(--color-text-muted)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
         {label}
       </label>
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm disabled:opacity-50"
-      />
+      <div className="relative">
+        <input
+          type={inputType}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm disabled:opacity-50 ${isPasswordType ? "pr-10" : ""}`}
+        />
+        {isPasswordType && (
+          <button type="button" onClick={() => setShowPassword((s) => !s)} tabIndex={-1}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer text-sm">
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

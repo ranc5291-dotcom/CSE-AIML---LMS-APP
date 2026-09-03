@@ -395,8 +395,8 @@ export default function PlacementDashboard() {
 
                     {c.eligibility && (
                       <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
-                        <p className="text-blue-300 text-xs font-semibold mb-1">✅ Eligibility Criteria</p>
-                        <p className="text-blue-200 text-xs">{c.eligibility}</p>
+                        <p className="text-blue-700 dark:text-blue-300 text-xs font-semibold mb-1">✅ Eligibility Criteria</p>
+                        <p className="text-blue-700/80 dark:text-blue-200 text-xs">{c.eligibility}</p>
                       </div>
                     )}
 
