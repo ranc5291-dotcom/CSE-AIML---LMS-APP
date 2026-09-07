@@ -36,7 +36,7 @@ const EMPTY_COMPANY = {
 };
 
 export default function PlacementDashboard() {
-  const { user } = useAuth();
+  const { user, hasAnyRole } = useAuth();
   const {
     companies, addCompany, removeCompany, updateCompanyStatus, updateCompany,
     dsaList, addDsa, removeDsa,
@@ -44,7 +44,11 @@ export default function PlacementDashboard() {
     placementUploads, addPlacementUpload, removePlacementUpload,
   } = useLMS();
 
-  const isOfficer = user?.role === "placement" || user?.role === "admin";
+  // Checks the full set of roles granted to this account (via multi-role
+  // access), not just their original signup role — so someone given
+  // placement access from a different primary role (e.g. faculty) still
+  // gets edit/upload/remove rights here.
+  const isOfficer = hasAnyRole(["placement", "admin"]);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeTab, setActiveTab]   = useState("Companies");

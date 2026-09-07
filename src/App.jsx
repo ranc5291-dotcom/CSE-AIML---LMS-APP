@@ -15,6 +15,7 @@ import Events from "./pages/Events";
 import Funds from "./pages/Funds";
 import Gallery from "./pages/Gallery";
 import Settings from "./pages/Settings";
+import Timetable from "./pages/Timetable";
 
 const ROLE_ROUTES = {
   student: "/student",
@@ -116,6 +117,9 @@ function AppContent() {
       } />
       <Route path="/settings" element={
         <ProtectedRoute><Settings /></ProtectedRoute>
+      } />
+      <Route path="/timetable" element={
+        <ProtectedRoute><Timetable /></ProtectedRoute>
       } />
     </Routes>
   );

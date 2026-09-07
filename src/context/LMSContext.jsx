@@ -69,6 +69,7 @@ export function LMSProvider({ children }) {
   const [marks, setMarks]                 = useState({});
   const [internals, setInternals]         = useState({});
   const [markSheetUploads, setMarkSheetUploads] = useState([]);
+  const [timetables, setTimetables]       = useState([]);
   const [events, setEvents]               = useState([]);
   const [notices, setNotices]             = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -121,6 +122,7 @@ export function LMSProvider({ children }) {
     listen("aptitude", setAptitude, []);
     listen("placementUploads", setPlacementUploads, []);
     listen("markSheetUploads", setMarkSheetUploads, []);
+    listen("timetables", setTimetables, []);
     listen("promotions", setPromotions, []);
     listen("events", setEvents, [], "date", "asc");
     listen("complaints", setComplaints, []);
@@ -492,6 +494,54 @@ export function LMSProvider({ children }) {
     setMarkSheetUploads((p) => p.filter((m) => m.id !== id));
   };
 
+  // ── TIMETABLE — faculty uploads an image or PDF per semester; students
+  // (and faculty) can view/download it. `timetables` is ordered by
+  // createdAt desc (see the `listen` call above), so for any given
+  // semester the FIRST matching entry is always the current/latest one —
+  // older entries for that sem are kept as history rather than overwritten.
+  const addTimetable = async (sem, file, uploadedBy) => {
+    if (!file) throw new Error("A file is required to upload a timetable.");
+    const up = await uploadToCloudinary(file);
+
+    await addDoc(collection(db, "timetables"), {
+      sem,
+      fileUrl: up.fileUrl,
+      fileName: up.fileName,
+      size: up.fileSize,
+      uploadedBy,
+      createdAt: serverTimestamp(),
+      date: new Date().toLocaleDateString(),
+    });
+
+    await addDoc(collection(db, "notices"), {
+      title:      `Timetable updated — ${sem}`,
+      content:    `A new timetable has been uploaded for ${sem}`,
+      tag:        "Academic",
+      postedBy:   uploadedBy,
+      postedRole: "faculty",
+      targetType: "academic",
+      year:       SEM_TO_YEAR[sem] || null,
+      semester:   sem,
+      createdAt:  serverTimestamp(),
+      date:       new Date().toLocaleDateString(),
+      time:       new Date().toLocaleTimeString(),
+    });
+
+    sendNotification({
+      title: `Timetable updated — ${sem}`,
+      body: `A new timetable has been uploaded for ${sem}`,
+      url: "/timetable",
+      role: "student",
+      year: SEM_TO_YEAR[sem] || null,
+      semester: sem,
+    });
+  };
+
+  const removeTimetable = async (id) => {
+    try { await deleteDoc(doc(db, "timetables", String(id))); } catch (e) { console.warn("removeTimetable:", e.message); }
+    setTimetables((p) => p.filter((t) => t.id !== id));
+  };
+
   const addAssignment = async (data, file = null) => {
     let fileUrl = null, fileName = null;
     if (file) {
@@ -692,6 +742,7 @@ export function LMSProvider({ children }) {
       attendance, updateAttendance,
       marks, updateMark, updateMarksBulk,
       markSheetUploads, addMarkSheetUpload, removeMarkSheetUpload,
+      timetables, addTimetable, removeTimetable,
       events, addEvent, removeEvent, joinEvent,
       notices, addNotice, removeNotice,
       announcements, addAnnouncement, removeAnnouncement,

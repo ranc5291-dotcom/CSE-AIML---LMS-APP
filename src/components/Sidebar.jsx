@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -6,6 +6,7 @@ const NAV_ITEMS = {
   student: [
     { icon: "🏠", label: "Dashboard",   path: "/student" },
     { icon: "📚", label: "Subjects",    path: "/student", tab: "Notes & Subjects" },
+    { icon: "🗓️", label: "Timetable",   path: "/timetable" },
     { icon: "📄", label: "Notes & PYQ", path: "/student", tab: "Notes & Subjects" },
     { icon: "📅", label: "Attendance",  path: "/student", tab: "Attendance" },
     { icon: "🏆", label: "My Marks",    path: "/student", tab: "Marks" },
@@ -19,6 +20,7 @@ const NAV_ITEMS = {
   faculty: [
     { icon: "🏠", label: "Dashboard",       path: "/faculty" },
     { icon: "📚", label: "My Subjects",     path: "/faculty" },
+    { icon: "🗓️", label: "Timetable",       path: "/timetable" },
     { icon: "📤", label: "Upload Notes",    path: "/faculty" },
     { icon: "📅", label: "Attendance",      path: "/faculty" },
     { icon: "📝", label: "Assignments",     path: "/faculty" },
@@ -63,6 +65,16 @@ const ROLE_ROUTES = {
   admin: "/admin",
 };
 
+// Reverse lookup so the sidebar can tell which dashboard is ACTUALLY being
+// shown, straight from the URL — this is the source of truth, not context
+// state, which can drift out of sync with the page that's really rendered.
+const ROUTE_TO_ROLE = {
+  "/student": "student",
+  "/faculty": "faculty",
+  "/placement": "placement",
+  "/admin": "admin",
+};
+
 const ROLE_ICONS = {
   student: "🎓",
   faculty: "👨‍🏫",
@@ -84,7 +96,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
   const [collapsed, setCollapsed] = useState(false);
 
-  const currentRole = user?.activeRole || user?.role;
+  // If we're on a dashboard route, that route IS the truth about which
+  // dashboard is showing. Only fall back to context state (activeRole)
+  // for non-dashboard pages (Events, Timetable, Gallery, etc.) where the
+  // URL alone can't tell us which dashboard the person came from.
+  const routeRole   = ROUTE_TO_ROLE[location.pathname];
+  const currentRole = routeRole || user?.activeRole || user?.role;
+
   const items = NAV_ITEMS[currentRole] || NAV_ITEMS.student;
   const multiRole = (user?.roles?.length || 0) > 1;
 
@@ -92,6 +110,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
   // to "Overview" the same way StudentDashboard's own activeTab state does,
   // so a fresh page load and a client-side nav agree on what's "active".
   const currentTab = location.state?.tab || "Overview";
+
+  // Keep context's activeRole in sync with whatever dashboard route we're
+  // actually on, so anything else reading user.activeRole (e.g. after
+  // navigating away to Events and back) stays accurate too.
+  useEffect(() => {
+    if (routeRole && user?.roles?.includes(routeRole) && routeRole !== user.activeRole) {
+      setActiveRole(routeRole);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeRole]);
 
   const handleNav = (path, tab) => {
     navigate(path, { state: { tab } });

@@ -479,9 +479,7 @@ export default function StudentDashboard() {
     else alert(`"${fileName}" - Ask faculty to re-upload this file.`);
   };
 
-  // CGPA stat removed — Overview now shows Attendance, Pending Assignments, and Open Drives.
   const STATS = [
-    { label: "Attendance",          value: `${avgAttendance}%`, color: "from-blue-500 to-cyan-500",    onClick: () => setActiveTab("Attendance") },
     { label: "Pending Assignments", value: myAssignments.length, color: "from-amber-500 to-orange-500", onClick: () => setActiveTab("Notes & Subjects") },
     { label: "Open Drives",         value: openCompanies.length, color: "from-rose-500 to-pink-500",    onClick: () => setActiveTab("Placement") },
   ];
