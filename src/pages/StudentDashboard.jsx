@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLMS, normalizeSubjectMarks } from "../context/LMSContext";
 import { getStudentMarksFull, getCatalogSubjects, getStudentAttendanceFull } from "../utils/supabase";
@@ -21,6 +21,17 @@ const DASHBOARD_TABS = ["Overview", "Notes & Subjects", "Placement", "Marks", "A
 function getYearForSem(semLabel) {
   const found = YEARS.find((y) => y.sems.includes(semLabel));
   return found ? found.label : null;
+}
+
+function RegistrationIncomplete() {
+  return (
+    <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-8 text-center">
+      <p className="text-[var(--color-text-primary)] font-semibold mb-1">Registration incomplete</p>
+      <p className="text-[var(--color-text-muted)] text-sm">
+        Your semester hasn't been set yet. Please complete your profile/registration, or contact the admin.
+      </p>
+    </div>
+  );
 }
 
 function SubjectPopup({ subject, sem, notes, assignments, onClose, onOpenPDF }) {
@@ -173,25 +184,28 @@ function PromotionPopup({ promo, onAcknowledge }) {
   );
 }
 
-function MyMarksPanel({ marksSem, setMarksSem, userId }) {
+// Locked to the student's current semester — no selector. Semester
+// changes automatically the instant Admin promotes them, since `sem`
+// is passed straight from user.sem in the parent.
+function MyMarksPanel({ sem, userId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [marksData, setMarksData] = useState({});
 
   useEffect(() => {
-    if (!userId || !marksSem) return;
+    if (!userId || !sem) return;
     let cancelled = false;
 
     async function fetchMarks() {
       setLoading(true);
       setError(null);
       try {
-        const yearLabel = getYearForSem(marksSem);
+        const yearLabel = getYearForSem(sem);
         if (!yearLabel) {
           if (!cancelled) setMarksData({});
           return;
         }
-        const data = await getStudentMarksFull(userId, yearLabel, marksSem);
+        const data = await getStudentMarksFull(userId, yearLabel, sem);
         if (!cancelled) setMarksData(data || {});
       } catch (err) {
         console.error("Failed to fetch marks:", err);
@@ -205,7 +219,7 @@ function MyMarksPanel({ marksSem, setMarksSem, userId }) {
     return () => {
       cancelled = true;
     };
-  }, [userId, marksSem]);
+  }, [userId, sem]);
 
   const subjectNames = Object.keys(marksData);
 
@@ -213,29 +227,10 @@ function MyMarksPanel({ marksSem, setMarksSem, userId }) {
     <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
       <div>
         <h3 className="text-[var(--color-text-primary)] font-semibold mb-1">🏆 My Marks</h3>
-        <p className="text-[var(--color-text-muted)] text-xs">Select a semester to view your internal marks.</p>
-      </div>
-
-      <div className="grid grid-cols-4 gap-2 max-w-md">
-        {ALL_SEMS.map((sem) => (
-          <button
-            key={sem}
-            onClick={() => setMarksSem(sem)}
-            className={`px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer
-              ${marksSem === sem
-                ? "bg-[var(--color-accent-solid)] text-white"
-                : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
-          >
-            {sem}
-          </button>
-        ))}
+        <p className="text-[var(--color-text-muted)] text-xs">{sem}</p>
       </div>
 
       <div className="pt-2 space-y-3">
-        <h4 className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider">
-          {marksSem} — My Marks
-        </h4>
-
         {loading && (
           <p className="text-[var(--color-text-muted)] text-sm">Loading marks…</p>
         )}
@@ -245,7 +240,7 @@ function MyMarksPanel({ marksSem, setMarksSem, userId }) {
         )}
 
         {!loading && !error && subjectNames.length === 0 && (
-          <p className="text-[var(--color-text-muted)] text-sm">No subjects have been added for {marksSem} yet.</p>
+          <p className="text-[var(--color-text-muted)] text-sm">No subjects have been added for {sem} yet.</p>
         )}
 
         {!loading && !error && subjectNames.map((subject) => {
@@ -313,21 +308,22 @@ function MyMarksPanel({ marksSem, setMarksSem, userId }) {
   );
 }
 
-function MyAttendancePanel({ attSem, setAttSem, userId }) {
+// Same pattern as MyMarksPanel — locked to current semester, no selector.
+function MyAttendancePanel({ sem, userId }) {
   const [loading, setLoading] = useState(true);
   const [attData, setAttData] = useState({});
 
   useEffect(() => {
-    if (!userId || !attSem) return;
+    if (!userId || !sem) return;
     let cancelled = false;
     setLoading(true);
-    const yearLabel = getYearForSem(attSem);
+    const yearLabel = getYearForSem(sem);
     if (!yearLabel) { setAttData({}); setLoading(false); return; }
-    getStudentAttendanceFull(userId, yearLabel, attSem).then((data) => {
+    getStudentAttendanceFull(userId, yearLabel, sem).then((data) => {
       if (!cancelled) { setAttData(data || {}); setLoading(false); }
     });
     return () => { cancelled = true; };
-  }, [userId, attSem]);
+  }, [userId, sem]);
 
   const subjectNames = Object.keys(attData);
 
@@ -335,23 +331,13 @@ function MyAttendancePanel({ attSem, setAttSem, userId }) {
     <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
       <div>
         <h3 className="text-[var(--color-text-primary)] font-semibold mb-1">📅 My Attendance</h3>
-        <p className="text-[var(--color-text-muted)] text-xs">Select a semester to view your attendance.</p>
-      </div>
-
-      <div className="grid grid-cols-4 gap-2 max-w-md">
-        {ALL_SEMS.map((sem) => (
-          <button key={sem} onClick={() => setAttSem(sem)}
-            className={`px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer
-              ${attSem === sem ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
-            {sem}
-          </button>
-        ))}
+        <p className="text-[var(--color-text-muted)] text-xs">{sem}</p>
       </div>
 
       {loading && <p className="text-[var(--color-text-muted)] text-sm">Loading attendance…</p>}
 
       {!loading && subjectNames.length === 0 && (
-        <p className="text-[var(--color-text-muted)] text-sm">No attendance recorded for {attSem} yet.</p>
+        <p className="text-[var(--color-text-muted)] text-sm">No attendance recorded for {sem} yet.</p>
       )}
 
       {!loading && (
@@ -378,9 +364,68 @@ function MyAttendancePanel({ attSem, setAttSem, userId }) {
   );
 }
 
+// Cross-semester PYQ browser — this is deliberately NOT locked to the
+// current semester, since previous question papers stay useful for
+// reference/prep regardless of what semester the student is in now.
+function PreviousPYQPanel({ notes }) {
+  const [pyqSem, setPyqSem] = useState(null); // null = "All"
+  const pyqNotes = notes.filter((n) => n.type === "PYQ" && (!pyqSem || n.sem === pyqSem));
+
+  return (
+    <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+      <div>
+        <h3 className="text-[var(--color-text-primary)] font-semibold mb-1">📚 Previous Question Papers</h3>
+        <p className="text-[var(--color-text-muted)] text-xs">Browse PYQs from any semester — these stay available regardless of your current semester.</p>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => setPyqSem(null)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer
+            ${!pyqSem ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
+          All
+        </button>
+        {ALL_SEMS.map((sem) => (
+          <button key={sem} onClick={() => setPyqSem(sem)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer
+              ${pyqSem === sem ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
+            {sem}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-2">
+        {pyqNotes.length === 0 && (
+          <p className="text-[var(--color-text-muted)] text-sm py-4 text-center">
+            No previous question papers uploaded yet{pyqSem ? ` for ${pyqSem}` : ""}.
+          </p>
+        )}
+        {pyqNotes.map((note) => (
+          <div key={note.id} className="flex items-center gap-3 bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] p-3">
+            <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center text-lg flex-shrink-0">📕</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
+              <p className="text-[var(--color-text-muted)] text-xs">{note.subject} · {note.sem} · {note.uploadedBy}</p>
+            </div>
+            <a
+              href={note.fileUrl || "#"}
+              target="_blank"
+              rel="noreferrer"
+              download={note.file}
+              className={note.fileUrl
+                ? "px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs hover:bg-green-500/20 cursor-pointer flex-shrink-0"
+                : "px-3 py-1.5 bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] rounded-lg text-xs pointer-events-none flex-shrink-0"}
+            >
+              Download
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const {
     notes, attendance,
     assignments, announcements, notices,
@@ -391,12 +436,6 @@ export default function StudentDashboard() {
 
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [activeTab, setActiveTab]       = useState(location.state?.tab || "Overview");
-  const [selectedYear, setSelectedYear] = useState(() => {
-    return YEARS.find((y) => y.label === user?.year) || YEARS[2];
-  });
-  const [selectedSem, setSelectedSem]   = useState(user?.sem || "Sem 5");
-  const [marksSem, setMarksSem]         = useState(user?.sem || "Sem 5");
-  const [attSem, setAttSem]             = useState(user?.sem || "Sem 5");
   const [pdfViewer, setPdfViewer]       = useState(null);
   const [subjectPopup, setSubjectPopup] = useState(null);
   const [activePromo, setActivePromo]   = useState(null);
@@ -404,27 +443,27 @@ export default function StudentDashboard() {
   const [catalogSubjects, setCatalogSubjects] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
 
+  // The student's current academic position — the single source of truth
+  // for every "current semester" section below. No manual override exists
+  // anywhere on this page; this updates automatically the moment Admin
+  // promotes the student (user.year/user.sem change -> everything here
+  // just re-renders against the new values).
+  const currentYear = user?.year;
+  const currentSem  = user?.sem;
+  const hasSemester = !!currentYear && !!currentSem;
+
   useEffect(() => {
+    if (!hasSemester) { setCatalogLoading(false); setCatalogSubjects([]); return; }
     let cancelled = false;
     setCatalogLoading(true);
-    getCatalogSubjects(selectedYear.label, selectedSem).then((subs) => {
+    getCatalogSubjects(currentYear, currentSem).then((subs) => {
       if (!cancelled) {
         setCatalogSubjects(subs);
         setCatalogLoading(false);
       }
     });
     return () => { cancelled = true; };
-  }, [selectedYear.label, selectedSem]);
-
-  useEffect(() => {
-    if (user?.sem && user.sem !== selectedSem) {
-      const matchedYear = YEARS.find((y) => y.label === user.year);
-      if (matchedYear) setSelectedYear(matchedYear);
-      setSelectedSem(user.sem);
-      setMarksSem(user.sem);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.sem, user?.year]);
+  }, [currentYear, currentSem, hasSemester]);
 
   useEffect(() => {
     if (!user?.id || !promotions) return;
@@ -452,10 +491,17 @@ export default function StudentDashboard() {
       )
     : 0;
 
-  const myAssignments  = assignments.filter((a) => a.sem === user?.sem);
+  const myAssignments  = assignments.filter((a) => a.sem === currentSem);
   const openCompanies  = companies.filter((c) => c.status === "Open");
-  const upcomingEvents = [...events]
-    .filter((e) => e.date >= new Date().toISOString().split("T")[0])
+
+  // Deduped by event id before filtering/sorting, so a duplicate Firestore
+  // snapshot entry (or any other source of a repeated id) never shows the
+  // same event twice in the "Upcoming Events" strip.
+  const eventMap = new Map();
+  (events || []).forEach((e) => eventMap.set(e.id, e));
+  const todayStr = new Date().toISOString().split("T")[0];
+  const upcomingEvents = [...eventMap.values()]
+    .filter((e) => e.date >= todayStr)
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 3);
 
@@ -466,7 +512,7 @@ export default function StudentDashboard() {
     .filter((n) => {
       const targetType = n.targetType || "global";
       if (targetType === "global") return true;
-      return n.year === user?.year && n.semester === user?.sem;
+      return n.year === currentYear && n.semester === currentSem;
     })
     .sort((a, b) => {
       const ta = a.createdAt?.seconds || 0;
@@ -480,8 +526,9 @@ export default function StudentDashboard() {
   };
 
   const STATS = [
-    { label: "Pending Assignments", value: myAssignments.length, color: "from-amber-500 to-orange-500", onClick: () => setActiveTab("Notes & Subjects") },
-    { label: "Open Drives",         value: openCompanies.length, color: "from-rose-500 to-pink-500",    onClick: () => setActiveTab("Placement") },
+    { label: "Assignments", value: myAssignments.length, color: "from-amber-500 to-orange-500", onClick: () => setActiveTab("Notes & Subjects") },
+    { label: "Open Drives", value: openCompanies.length, color: "from-rose-500 to-pink-500",    onClick: () => setActiveTab("Placement") },
+    { label: "Timetable",   value: null,                 color: "from-blue-500 to-cyan-500",     onClick: () => navigate("/timetable") },
   ];
 
   return (
@@ -497,7 +544,7 @@ export default function StudentDashboard() {
             <p className="text-white/80 text-sm mb-1">Welcome back</p>
             <h2 className="text-2xl font-bold">{user?.name}</h2>
             <p className="text-white/80 text-sm mt-1">
-              {user?.branch || "CSEAIML"} - {user?.usn || user?.id} - {user?.year} - {user?.sem}
+              {user?.branch || "CSEAIML"} - {user?.usn || user?.id} - {currentYear || "—"} - {currentSem || "—"}
             </p>
           </div>
 
@@ -525,7 +572,7 @@ export default function StudentDashboard() {
             {STATS.map((stat) => (
               <button key={stat.label} onClick={stat.onClick} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 text-left cursor-pointer hover:border-[var(--color-text-muted)] transition-all">
                 <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-lg mb-3`}></div>
-                <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stat.value}</p>
+                <p className="text-2xl font-bold text-[var(--color-text-primary)]">{stat.value !== null ? stat.value : "→"}</p>
                 <p className="text-[var(--color-text-secondary)] text-xs mt-0.5">{stat.label}</p>
               </button>
             ))}
@@ -587,11 +634,11 @@ export default function StudentDashboard() {
               </div>
 
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
-                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Assignment Reminders</h3>
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Assignments</h3>
                 <div className="space-y-3">
                   {myAssignments.length === 0 && (
                     <div className="text-center py-5 text-[var(--color-text-muted)]">
-                      <p className="text-sm">No pending assignments</p>
+                      <p className="text-sm">No assignments yet</p>
                     </div>
                   )}
                   {myAssignments.map((a) => (
@@ -664,33 +711,10 @@ export default function StudentDashboard() {
           )}
 
           {activeTab === "Notes & Subjects" && (
+            !hasSemester ? <RegistrationIncomplete /> :
             <div className="space-y-4">
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
-                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">Subjects by Year & Semester</h3>
-                <div className="flex gap-2 flex-wrap mb-3">
-                  {YEARS.map((year) => {
-                    const yearClass = selectedYear.label === year.label
-                      ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-accent-solid)] text-white"
-                      : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]";
-                    return (
-                      <button key={year.label} onClick={() => { setSelectedYear(year); setSelectedSem(year.sems[0]); }} className={yearClass}>
-                        {year.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-2 mb-5">
-                  {selectedYear.sems.map((sem) => {
-                    const semClass = selectedSem === sem
-                      ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-accent-to)] text-white"
-                      : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]";
-                    return (
-                      <button key={sem} onClick={() => setSelectedSem(sem)} className={semClass}>
-                        {sem}
-                      </button>
-                    );
-                  })}
-                </div>
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">My Subjects — {currentSem}</h3>
 
                 {catalogLoading && (
                   <p className="text-[var(--color-text-muted)] text-sm py-4">Loading subjects...</p>
@@ -701,16 +725,16 @@ export default function StudentDashboard() {
                     {catalogSubjects.map((s) => {
                       const subjectName = s.subject_name;
                       const subjectNotesCount = notes.filter(
-                        (n) => n.subject === subjectName && n.sem === selectedSem
+                        (n) => n.subject === subjectName && n.sem === currentSem
                       ).length;
                       const subjectAssignCount = assignments.filter(
-                        (a) => a.subject === subjectName && a.sem === selectedSem
+                        (a) => a.subject === subjectName && a.sem === currentSem
                       ).length;
                       return (
-                        <button key={s.id} onClick={() => setSubjectPopup({ subject: subjectName, sem: selectedSem })} className="bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] hover:border-[var(--color-accent-solid)]/50 rounded-xl p-4 cursor-pointer transition-all group text-left">
+                        <button key={s.id} onClick={() => setSubjectPopup({ subject: subjectName, sem: currentSem })} className="bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] hover:border-[var(--color-accent-solid)]/50 rounded-xl p-4 cursor-pointer transition-all group text-left">
                           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-accent-from)]/20 to-[var(--color-accent-to)]/20 flex items-center justify-center text-xl mb-3 group-hover:scale-110 transition-transform"></div>
                           <p className="text-[var(--color-text-primary)] text-xs font-semibold leading-tight mb-2">{subjectName}</p>
-                          <p className="text-[var(--color-text-muted)] text-xs">{selectedSem}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs">{currentSem}</p>
                           <div className="flex gap-2 mt-2">
                             {subjectNotesCount > 0 && (
                               <span className="text-xs px-1.5 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-md">{subjectNotesCount}</span>
@@ -727,7 +751,7 @@ export default function StudentDashboard() {
                     })}
                     {catalogSubjects.length === 0 && (
                       <div className="col-span-4 text-center py-8 text-[var(--color-text-muted)]">
-                        <p className="text-sm">No subjects added yet for {selectedSem}</p>
+                        <p className="text-sm">No subjects added yet for {currentSem}</p>
                         <p className="text-xs mt-1">Faculty will add subjects soon</p>
                       </div>
                     )}
@@ -736,14 +760,14 @@ export default function StudentDashboard() {
               </div>
 
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
-                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">All Notes & PYQs - {selectedSem}</h3>
+                <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">All Notes & PYQs - {currentSem}</h3>
                 <div className="space-y-3">
-                  {notes.filter((n) => n.sem === selectedSem).length === 0 && (
+                  {notes.filter((n) => n.sem === currentSem).length === 0 && (
                     <div className="text-center py-6 text-[var(--color-text-muted)]">
-                      <p className="text-sm">No files uploaded yet for {selectedSem}</p>
+                      <p className="text-sm">No files uploaded yet for {currentSem}</p>
                     </div>
                   )}
-                  {notes.filter((n) => n.sem === selectedSem).map((note) => {
+                  {notes.filter((n) => n.sem === currentSem).map((note) => {
                     const viewClass = note.fileUrl
                       ? "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)]"
                       : "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-[var(--color-text-muted)] cursor-not-allowed";
@@ -773,6 +797,8 @@ export default function StudentDashboard() {
                   })}
                 </div>
               </div>
+
+              <PreviousPYQPanel notes={notes} />
             </div>
           )}
 
@@ -897,17 +923,15 @@ export default function StudentDashboard() {
           )}
 
           {activeTab === "Marks" && (
+            !hasSemester ? <RegistrationIncomplete /> :
             <div className="space-y-4">
-              <MyMarksPanel
-                marksSem={marksSem}
-                setMarksSem={setMarksSem}
-                userId={user?.id}
-              />
+              <MyMarksPanel sem={currentSem} userId={user?.id} />
             </div>
           )}
 
           {activeTab === "Attendance" && (
-            <MyAttendancePanel attSem={attSem} setAttSem={setAttSem} userId={user?.id} />
+            !hasSemester ? <RegistrationIncomplete /> :
+            <MyAttendancePanel sem={currentSem} userId={user?.id} />
           )}
 
         </main>

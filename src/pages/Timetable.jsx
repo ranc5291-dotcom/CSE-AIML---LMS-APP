@@ -16,20 +16,48 @@ function isImageFile(fileName = "") {
 }
 
 export default function Timetable() {
-  const { user, hasAnyRole } = useAuth();
+  const { user } = useAuth();
   const { timetables, addTimetable, removeTimetable } = useLMS();
 
   const [mobileOpen, setMobileOpen]   = useState(false);
-  const [selectedSem, setSelectedSem] = useState(user?.sem || "Sem 1");
   const [uploading, setUploading]     = useState(false);
   const [error, setError]             = useState(null);
   const [viewerFile, setViewerFile]   = useState(null);
 
-  // Checks the full set of roles granted to this account (via multi-role
-  // access), not just their original signup role — so someone given
-  // faculty/admin access from a different primary role still sees the
-  // upload controls here.
-  const isFaculty = hasAnyRole(["faculty", "admin"]);
+  // IMPORTANT: this checks the CURRENTLY ACTIVE dashboard role, not the
+  // full set of roles the account holds. A user with multi-role access
+  // (e.g. granted both Student and Faculty dashboards) must only see the
+  // faculty upload/manage UI while their active dashboard is Faculty —
+  // otherwise semester auto-filtering breaks for them on the Student
+  // dashboard, since they'd always match hasAnyRole(["faculty","admin"]).
+  const isFaculty = user?.activeRole === "faculty" || user?.activeRole === "admin";
+
+  // Faculty can browse/manage any semester's timetable. Students are
+  // locked to their own current semester — no manual switching, and it
+  // updates automatically the moment Admin promotes them (user.sem
+  // changes -> this just re-renders with the new value).
+  const [facultySelectedSem, setFacultySelectedSem] = useState(user?.sem || "Sem 1");
+  const selectedSem = isFaculty ? facultySelectedSem : user?.sem;
+
+  // Edge case: student has no semester set on their profile yet.
+  if (!isFaculty && !selectedSem) {
+    return (
+      <div className="flex h-screen bg-[var(--color-bg-app)] overflow-hidden">
+        <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Navbar onMenuClick={() => setMobileOpen(true)} title="Timetable" />
+          <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-8 text-center">
+              <p className="text-[var(--color-text-primary)] font-semibold mb-1">Registration incomplete</p>
+              <p className="text-[var(--color-text-muted)] text-sm">
+                Your semester hasn't been set yet. Please complete your profile/registration, or contact the admin.
+              </p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   // `timetables` comes ordered createdAt desc (see LMSContext's listener),
   // so the first match for a given semester is always the latest upload.
@@ -71,27 +99,33 @@ export default function Timetable() {
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
 
           <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
-            <h2 className="text-[var(--color-text-primary)] font-semibold mb-1">🗓️ Timetable</h2>
-            <p className="text-[var(--color-text-muted)] text-xs mb-4">
-              {isFaculty
-                ? "Select a semester and upload the timetable as an image or PDF."
-                : "Select a semester to view your timetable."}
-            </p>
-
-            <div className="grid grid-cols-4 gap-2 max-w-md">
-              {ALL_SEMS.map((sem) => (
-                <button
-                  key={sem}
-                  onClick={() => setSelectedSem(sem)}
-                  className={`px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer
-                    ${selectedSem === sem
-                      ? "bg-[var(--color-accent-solid)] text-white"
-                      : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
-                >
-                  {sem}
-                </button>
-              ))}
-            </div>
+            {isFaculty ? (
+              <>
+                <h2 className="text-[var(--color-text-primary)] font-semibold mb-1">🗓️ Timetable</h2>
+                <p className="text-[var(--color-text-muted)] text-xs mb-4">
+                  Select a semester and upload the timetable as an image or PDF.
+                </p>
+                <div className="grid grid-cols-4 gap-2 max-w-md">
+                  {ALL_SEMS.map((sem) => (
+                    <button
+                      key={sem}
+                      onClick={() => setFacultySelectedSem(sem)}
+                      className={`px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer
+                        ${facultySelectedSem === sem
+                          ? "bg-[var(--color-accent-solid)] text-white"
+                          : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
+                    >
+                      {sem}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-[var(--color-text-primary)] font-semibold mb-1">🗓️ My Timetable</h2>
+                <p className="text-[var(--color-text-muted)] text-xs">{selectedSem}</p>
+              </>
+            )}
           </div>
 
           {isFaculty && (
