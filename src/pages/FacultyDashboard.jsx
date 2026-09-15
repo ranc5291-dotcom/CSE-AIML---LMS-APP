@@ -26,6 +26,10 @@ const YEARS = [
 
 const TABS = ["My Subjects", "Upload Notes", "Assignments", "Attendance", "Notice Board", "Gallery"];
 
+// All semesters available for Notice Board targeting (independent of the
+// Year/Semester selector above, which only scopes Subjects/Notes/etc.)
+const SEM_OPTIONS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"];
+
 function SubjectCatalogModal({ initialYear, initialSem, onClose, onChanged }) {
   const [year, setYear] = useState(initialYear);
   const [sem, setSem] = useState(initialSem);
@@ -465,6 +469,9 @@ export default function FacultyDashboard() {
   const [noticeFile, setNoticeFile] = useState(null);
   const [noticePosting, setNoticePosting] = useState(false);
   const noticeFileRef = useRef(null);
+  // Notice targeting — either specific semester(s), or the whole branch.
+  const [noticeSemesters, setNoticeSemesters] = useState([]);
+  const [noticeBranchWide, setNoticeBranchWide] = useState(false);
 
   const [galleryCaption, setGalleryCaption] = useState("");
   const [galleryFile, setGalleryFile] = useState(null);
@@ -704,18 +711,45 @@ export default function FacultyDashboard() {
     setAttendanceSaving(false);
   };
 
+  // Notice targeting — checking "Whole Branch" clears any selected
+  // semesters (mutually exclusive); picking a semester turns branch-wide off.
+  const toggleNoticeSemester = (sem) => {
+    setNoticeBranchWide(false);
+    setNoticeSemesters((prev) =>
+      prev.includes(sem) ? prev.filter((s) => s !== sem) : [...prev, sem]
+    );
+  };
+
+  const toggleNoticeBranchWide = () => {
+    setNoticeBranchWide((prev) => {
+      const next = !prev;
+      if (next) setNoticeSemesters([]);
+      return next;
+    });
+  };
+
   // Notice can be posted as a plain message, or with an optional
   // attachment (PDF, image, etc.) — addNotice uploads it to Cloudinary.
+  // Target can be one or more specific semesters, or the whole branch.
   const handlePostNotice = async () => {
     if (!noticeTitle.trim()) return;
     setNoticePosting(true);
     try {
       await addNotice(
-        { title: noticeTitle, content: noticeContent, tag: noticeTag, postedBy: user?.name, postedRole: "faculty" },
+        {
+          title: noticeTitle,
+          content: noticeContent,
+          tag: noticeTag,
+          postedBy: user?.name,
+          postedRole: "faculty",
+          semesters: noticeBranchWide ? [] : noticeSemesters,
+          isBranchWide: noticeBranchWide,
+        },
         noticeFile
       );
       setNoticeTitle(""); setNoticeContent(""); setNoticeTag("Notice");
       setNoticeFile(null);
+      setNoticeSemesters([]); setNoticeBranchWide(false);
       if (noticeFileRef.current) noticeFileRef.current.value = "";
     } catch (err) {
       alert("Failed to post notice: " + err.message);
@@ -1138,6 +1172,36 @@ export default function FacultyDashboard() {
                   <input ref={noticeFileRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg"
                     onChange={(e) => e.target.files[0] && setNoticeFile(e.target.files[0])} className="hidden" />
                 </div>
+
+                {/* Notice targeting — specific semester(s) or the whole branch */}
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl p-3 space-y-2">
+                  <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider">Send To</p>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={noticeBranchWide}
+                      onChange={toggleNoticeBranchWide}
+                      className="w-4 h-4 cursor-pointer accent-[var(--color-accent-solid)]"
+                    />
+                    <span className="text-[var(--color-text-primary)] text-sm font-medium">🏛️ Whole CSE(AIML) Branch (all semesters)</span>
+                  </label>
+                  <div className={`flex flex-wrap gap-2 ${noticeBranchWide ? "opacity-40 pointer-events-none" : ""}`}>
+                    {SEM_OPTIONS.map((sem) => (
+                      <button
+                        key={sem}
+                        type="button"
+                        onClick={() => toggleNoticeSemester(sem)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-all
+                          ${noticeSemesters.includes(sem) ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
+                        {sem}
+                      </button>
+                    ))}
+                  </div>
+                  {!noticeBranchWide && noticeSemesters.length === 0 && (
+                    <p className="text-amber-400 text-xs">⚠ No semester selected — the notice will still post, but without semester targeting.</p>
+                  )}
+                </div>
+
                 <div className="flex gap-3">
                   <select value={noticeTag} onChange={(e) => setNoticeTag(e.target.value)}
                     className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm cursor-pointer">
@@ -1156,6 +1220,11 @@ export default function FacultyDashboard() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[var(--color-text-primary)] text-sm font-medium">{n.title}</p>
                       {n.content && <p className="text-[var(--color-text-secondary)] text-xs mt-1">{n.content}</p>}
+                      {(n.isBranchWide || (n.semesters && n.semesters.length > 0)) && (
+                        <p className="text-[var(--color-text-muted)] text-xs mt-1">
+                          🎯 {n.isBranchWide ? "Whole Branch" : n.semesters.join(", ")}
+                        </p>
+                      )}
                       {n.fileUrl && (
                         <a href={n.fileUrl} target="_blank" rel="noreferrer" download={n.fileName}
                           className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs font-medium hover:opacity-80">

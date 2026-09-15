@@ -16,7 +16,7 @@ const UPLOAD_CATEGORIES = [
   "Other",
 ];
 
-const TABS = ["Companies", "DSA Questions", "Aptitude Test", "Resources"];
+const TABS = ["Companies", "DSA Questions", "Resources"];
 
 const DSA_SORT_OPTIONS = [
   { key: "title",      label: "Problem" },
@@ -40,7 +40,6 @@ export default function PlacementDashboard() {
   const {
     companies, addCompany, removeCompany, updateCompanyStatus, updateCompany,
     dsaList, addDsa, removeDsa,
-    aptitude, addAptitude, removeAptitude,
     placementUploads, addPlacementUpload, removePlacementUpload,
   } = useLMS();
 
@@ -92,12 +91,6 @@ export default function PlacementDashboard() {
         return dsaSortDir === "asc" ? cmp : -cmp;
       })
     : dsaList;
-
-  // Aptitude form
-  const [showAptForm, setShowAptForm] = useState(false);
-  const [newQ, setNewQ]               = useState({ question: "", options: ["", "", "", ""], answer: 0 });
-  const [answers, setAnswers]         = useState({});
-  const [submitted, setSubmitted]     = useState(false);
 
   // Resources/Upload form
   const [showUploadForm, setShowUploadForm] = useState(false);
@@ -159,13 +152,6 @@ export default function PlacementDashboard() {
     setShowDsaForm(false);
   };
 
-  const handleAddQuestion = () => {
-    if (!newQ.question || newQ.options.some((o) => !o)) return;
-    addAptitude({ ...newQ });
-    setNewQ({ question: "", options: ["", "", "", ""], answer: 0 });
-    setShowAptForm(false);
-  };
-
   const handleUpload = async () => {
     if (!uploadTitle) return;
     setUploading(true);
@@ -190,10 +176,6 @@ export default function PlacementDashboard() {
     }
     setUploading(false);
   };
-
-  const score = submitted
-    ? aptitude.filter((q) => answers[q.id] === q.answer).length
-    : 0;
 
   const groupedUploads = UPLOAD_CATEGORIES.reduce((acc, cat) => {
     const items = placementUploads.filter((u) => u.category === cat);
@@ -551,137 +533,6 @@ export default function PlacementDashboard() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
-
-          {/* ── APTITUDE TEST ── */}
-          {activeTab === "Aptitude Test" && (
-            <div className="space-y-4">
-              {isOfficer && (
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => setShowAptForm(!showAptForm)}
-                    className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer transition-all"
-                  >
-                    {showAptForm ? "✕ Cancel" : "+ Add Question"}
-                  </button>
-                </div>
-              )}
-
-              {showAptForm && isOfficer && (
-                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
-                  <h3 className="text-[var(--color-text-primary)] font-semibold">➕ Add Aptitude Question</h3>
-                  <input
-                    value={newQ.question}
-                    onChange={(e) => setNewQ({ ...newQ, question: e.target.value })}
-                    placeholder="Question *"
-                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    {newQ.options.map((opt, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="correct"
-                          checked={newQ.answer === idx}
-                          onChange={() => setNewQ({ ...newQ, answer: idx })}
-                          className="cursor-pointer accent-[var(--color-accent-solid)]"
-                        />
-                        <input
-                          value={opt}
-                          onChange={(e) => {
-                            const opts = [...newQ.options];
-                            opts[idx] = e.target.value;
-                            setNewQ({ ...newQ, options: opts });
-                          }}
-                          placeholder={`Option ${String.fromCharCode(65 + idx)}`}
-                          className="flex-1 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-xs focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-[var(--color-text-muted)] text-xs">
-                    Select the radio button next to the correct answer.
-                  </p>
-                  <button
-                    onClick={handleAddQuestion}
-                    className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer"
-                  >
-                    + Add Question
-                  </button>
-                </div>
-              )}
-
-              {submitted ? (
-                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-8 text-center">
-                  <p className="text-5xl mb-4">🎯</p>
-                  <h3 className="text-[var(--color-text-primary)] text-2xl font-bold mb-2">Test Completed!</h3>
-                  <p className="text-4xl font-bold text-amber-400 mb-4">
-                    {score} / {aptitude.length}
-                  </p>
-                  <button
-                    onClick={() => { setSubmitted(false); setAnswers({}); }}
-                    className="px-6 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-medium cursor-pointer"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {aptitude.map((q, i) => (
-                    <div key={q.id} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
-                      <div className="flex items-start justify-between gap-3 mb-4">
-                        <p className="text-[var(--color-text-primary)] text-sm font-medium">
-                          <span className="text-amber-400 mr-2">Q{i + 1}.</span>
-                          {q.question}
-                        </p>
-                        {isOfficer && (
-                          <button
-                            onClick={() => removeAptitude(q.id)}
-                            className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer flex-shrink-0"
-                          >
-                            🗑️
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {q.options.map((opt, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => setAnswers({ ...answers, [q.id]: idx })}
-                            className={`text-left px-4 py-2.5 rounded-xl text-xs font-medium transition-all cursor-pointer border
-                              ${answers[q.id] === idx
-                                ? "bg-[var(--color-accent-solid)] border-[var(--color-accent-solid)] text-white"
-                                : "bg-[var(--color-bg-surface-alt)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)]"}`}
-                          >
-                            {String.fromCharCode(65 + idx)}. {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {aptitude.length > 0 && (
-                    <button
-                      onClick={() => setSubmitted(true)}
-                      disabled={Object.keys(answers).length < aptitude.length}
-                      className="w-full py-3 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold cursor-pointer"
-                    >
-                      Submit Test ({Object.keys(answers).length}/{aptitude.length} answered)
-                    </button>
-                  )}
-
-                  {aptitude.length === 0 && (
-                    <div className="text-center py-12 text-[var(--color-text-muted)]">
-                      <p className="text-4xl mb-2">📝</p>
-                      <p className="text-sm">
-                        No questions yet.{" "}
-                        {isOfficer ? "Add some above." : "Check back soon."}
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           )}
 

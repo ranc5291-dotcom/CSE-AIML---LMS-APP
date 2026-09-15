@@ -259,6 +259,8 @@ export function LMSProvider({ children }) {
       targetType: "academic",
       year:       SEM_TO_YEAR[noteData.sem] || null,
       semester:   noteData.sem,
+      semesters:  [noteData.sem],
+      isBranchWide: false,
       createdAt:  serverTimestamp(),
       date:       new Date().toLocaleDateString(),
       time:       new Date().toLocaleTimeString(),
@@ -308,12 +310,26 @@ export function LMSProvider({ children }) {
 
   // Notice can be a plain message, or carry an optional attachment
   // (PDF, image, etc. — uploaded via Cloudinary, same as notes/gallery).
+  //
+  // TARGETING — notice.isBranchWide / notice.semesters decide who gets
+  // notified:
+  //   - isBranchWide: true      → every student, any semester
+  //   - semesters: [sem, ...]   → only students in those semester(s)
+  //   - neither set             → falls back to notifying everyone
+  // Both fields are now persisted on the notice doc AND used when
+  // calling sendNotification — previously they were accepted by the
+  // caller but silently dropped here, so every notice broadcast to
+  // ALL students regardless of what was picked in the "Send To" UI.
   const addNotice = async (notice, file = null) => {
     let fileUrl = null, fileName = null, fileSize = null;
     if (file) {
       const up = await uploadToCloudinary(file);
       fileUrl = up.fileUrl; fileName = up.fileName; fileSize = up.fileSize;
     }
+
+    const isBranchWide = !!notice.isBranchWide;
+    const semesters = isBranchWide ? [] : (notice.semesters || []);
+
     await addDoc(collection(db, "notices"), {
       title:      notice.title,
       content:    notice.content || "",
@@ -323,16 +339,38 @@ export function LMSProvider({ children }) {
       targetType: notice.targetType || "global",
       year:       notice.year || null,
       semester:   notice.semester || null,
+      semesters,
+      isBranchWide,
       fileUrl, fileName, fileSize,
       createdAt:  serverTimestamp(),
       date:       new Date().toLocaleDateString(),
       time:       new Date().toLocaleTimeString(),
     });
-    sendNotification({
-      title: `Notice: ${notice.tag || "New"}`,
-      body: notice.title,
-      url: "/notices",
-    });
+
+    const title = `Notice: ${notice.tag || "New"}`;
+    const body  = notice.title;
+
+    if (isBranchWide) {
+      // Whole branch — every student, regardless of semester.
+      sendNotification({ title, body, url: "/notices", role: "student" });
+    } else if (semesters.length > 0) {
+      // The backend's token query ANDs role + year + semester together
+      // for a single semester at a time, so fire one targeted call per
+      // selected semester rather than trying to pass an array.
+      semesters.forEach((sem) => {
+        sendNotification({
+          title, body, url: "/notices",
+          role: "student",
+          year: SEM_TO_YEAR[sem] || null,
+          semester: sem,
+        });
+      });
+    } else {
+      // No semester chosen and not branch-wide — keep the old
+      // "notify everyone" behavior as a safe fallback so a notice
+      // never silently notifies nobody.
+      sendNotification({ title, body, url: "/notices" });
+    }
   };
   const removeNotice = async (id) => {
     try { await deleteDoc(doc(db, "notices", String(id))); } catch {}
@@ -351,6 +389,8 @@ export function LMSProvider({ children }) {
       postedRole: "faculty",
       targetType: "academic",
       year, semester,
+      semesters:  semester ? [semester] : [],
+      isBranchWide: false,
       createdAt:  serverTimestamp(),
       date:       new Date().toLocaleDateString(),
       time:       new Date().toLocaleTimeString(),
@@ -522,6 +562,8 @@ export function LMSProvider({ children }) {
       targetType: "academic",
       year:       SEM_TO_YEAR[sem] || null,
       semester:   sem,
+      semesters:  [sem],
+      isBranchWide: false,
       createdAt:  serverTimestamp(),
       date:       new Date().toLocaleDateString(),
       time:       new Date().toLocaleTimeString(),
@@ -559,6 +601,8 @@ export function LMSProvider({ children }) {
       targetType: "academic",
       year:       SEM_TO_YEAR[data.sem] || null,
       semester:   data.sem || null,
+      semesters:  data.sem ? [data.sem] : [],
+      isBranchWide: false,
       createdAt:  serverTimestamp(),
       date:       new Date().toLocaleDateString(),
       time:       new Date().toLocaleTimeString(),

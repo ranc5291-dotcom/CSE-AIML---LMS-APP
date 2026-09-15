@@ -31,6 +31,10 @@ const SORT_OPTIONS = [
   { key: "status", label: "Status" },
 ];
 
+// Notice targeting — every semester the Notice Board can send to,
+// independent of the Student Management / Events filters above.
+const SEM_OPTIONS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"];
+
 // Sem label -> Year label, derived from SEM_SEQUENCE (used to filter/show
 // year on the Events tab, since event_registrations only stores semester).
 const SEM_TO_YEAR_MAP = Object.fromEntries(SEM_SEQUENCE.map(({ year, sem }) => [sem, year]));
@@ -68,6 +72,49 @@ export default function AdminDashboard() {
     else { setSortBy(key); setSortDir("asc"); }
   };
 
+  // Bulk Promote — promote every active student in a chosen Year/Sem
+  // to the next semester in SEM_SEQUENCE, in one action.
+  const [bulkPromoteYear, setBulkPromoteYear] = useState(SEM_SEQUENCE[0].year);
+  const [bulkPromoteSem, setBulkPromoteSem]   = useState(SEM_SEQUENCE[0].sem);
+  const [confirmBulkPromote, setConfirmBulkPromote] = useState(null);
+  const [bulkPromoting, setBulkPromoting]     = useState(false);
+  const [bulkPromoteMsg, setBulkPromoteMsg]   = useState("");
+
+  const openBulkPromoteConfirm = () => {
+    const idx = SEM_SEQUENCE.findIndex((s) => s.year === bulkPromoteYear && s.sem === bulkPromoteSem);
+    if (idx === -1 || idx === SEM_SEQUENCE.length - 1) {
+      alert("There is no next semester to promote into.");
+      return;
+    }
+    const next = SEM_SEQUENCE[idx + 1];
+    const eligible = students.filter(
+      (s) => s.year === bulkPromoteYear && s.sem === bulkPromoteSem && (s.status || "active") === "active"
+    );
+    if (eligible.length === 0) {
+      alert(`No active students found in ${bulkPromoteYear} · ${bulkPromoteSem}.`);
+      return;
+    }
+    setConfirmBulkPromote({
+      students: eligible,
+      fromYear: bulkPromoteYear, fromSem: bulkPromoteSem,
+      toYear: next.year, toSem: next.sem,
+    });
+  };
+
+  const executeBulkPromote = async () => {
+    if (!confirmBulkPromote) return;
+    setBulkPromoting(true);
+    const { students: list, fromYear, fromSem, toYear, toSem } = confirmBulkPromote;
+    for (const s of list) {
+      promoteStudent(s.id);
+      await addPromotion({ studentId: s.id, studentName: s.name, fromYear, fromSem, toYear, toSem });
+    }
+    setBulkPromoting(false);
+    setBulkPromoteMsg(`✅ Promoted ${list.length} student(s) from ${fromSem} to ${toSem}.`);
+    setConfirmBulkPromote(null);
+    setTimeout(() => setBulkPromoteMsg(""), 4000);
+  };
+
   // Notice board
   const [noticeTitle, setNoticeTitle]     = useState("");
   const [noticeContent, setNoticeContent] = useState("");
@@ -75,6 +122,9 @@ export default function AdminDashboard() {
   const [noticeFile, setNoticeFile]       = useState(null);
   const [noticePosting, setNoticePosting] = useState(false);
   const noticeFileRef = useRef(null);
+  // Notice targeting — either specific semester(s), or the whole branch.
+  const [noticeSemesters, setNoticeSemesters] = useState([]);
+  const [noticeBranchWide, setNoticeBranchWide] = useState(false);
 
   // Gallery
   const [galleryCaption, setGalleryCaption] = useState("");
@@ -226,21 +276,49 @@ export default function AdminDashboard() {
     setConfirmAction(null);
   };
 
+  // Notice targeting — checking "Whole Branch" clears any selected
+  // semesters (mutually exclusive); picking a semester turns branch-wide off.
+  const toggleNoticeSemester = (sem) => {
+    setNoticeBranchWide(false);
+    setNoticeSemesters((prev) =>
+      prev.includes(sem) ? prev.filter((s) => s !== sem) : [...prev, sem]
+    );
+  };
+
+  const toggleNoticeBranchWide = () => {
+    setNoticeBranchWide((prev) => {
+      const next = !prev;
+      if (next) setNoticeSemesters([]);
+      return next;
+    });
+  };
+
   // Notice can be posted as a plain message, or with an optional
   // attachment (PDF, image, etc.) — addNotice uploads it to Cloudinary,
-  // same as on the Faculty dashboard.
+  // same as on the Faculty dashboard. Target can be one or more specific
+  // semesters, or the whole branch.
   const handlePostNotice = async () => {
     if (!noticeTitle.trim()) return;
     setNoticePosting(true);
     try {
       await addNotice(
-        { title: noticeTitle, content: noticeContent, tag: noticeTag, postedBy: user?.name, postedRole: "admin" },
+        {
+          title: noticeTitle,
+          content: noticeContent,
+          tag: noticeTag,
+          postedBy: user?.name,
+          postedRole: "admin",
+          semesters: noticeBranchWide ? [] : noticeSemesters,
+          isBranchWide: noticeBranchWide,
+        },
         noticeFile
       );
       setNoticeTitle("");
       setNoticeContent("");
       setNoticeTag("Notice");
       setNoticeFile(null);
+      setNoticeSemesters([]);
+      setNoticeBranchWide(false);
       if (noticeFileRef.current) noticeFileRef.current.value = "";
     } catch (err) {
       alert("Failed to post notice: " + err.message);
@@ -517,6 +595,44 @@ export default function AdminDashboard() {
           {/* ── STUDENT MANAGEMENT ── */}
           {activeTab === "Student Management" && (
             <div className="space-y-5">
+
+              {/* Bulk Promote Semester */}
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 space-y-3">
+                <h3 className="text-[var(--color-text-primary)] font-semibold text-sm">⬆️ Bulk Promote Semester</h3>
+                <p className="text-[var(--color-text-muted)] text-xs">
+                  Promotes every <span className="text-[var(--color-text-primary)]">active</span> student in the chosen semester to the next one.
+                  Detained, dropout, and transferred students are skipped.
+                </p>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div>
+                    <label className="text-[var(--color-text-secondary)] text-xs block mb-1">Year</label>
+                    <select value={bulkPromoteYear}
+                      onChange={(e) => {
+                        const y = e.target.value;
+                        setBulkPromoteYear(y);
+                        setBulkPromoteSem(SEM_SEQUENCE.find((s) => s.year === y)?.sem);
+                      }}
+                      className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm cursor-pointer">
+                      {["1st Year","2nd Year","3rd Year","4th Year"].map((y) => <option key={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[var(--color-text-secondary)] text-xs block mb-1">Semester</label>
+                    <select value={bulkPromoteSem} onChange={(e) => setBulkPromoteSem(e.target.value)}
+                      className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm cursor-pointer">
+                      {SEM_SEQUENCE.filter((s) => s.year === bulkPromoteYear).map((s) => <option key={s.sem}>{s.sem}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={openBulkPromoteConfirm}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium cursor-pointer">
+                    ⬆️ Promote All in {bulkPromoteSem}
+                  </button>
+                </div>
+                {bulkPromoteMsg && (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm">{bulkPromoteMsg}</div>
+                )}
+              </div>
+
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 space-y-3">
                 <div className="flex flex-wrap gap-3 items-center">
                   <input
@@ -1047,6 +1163,36 @@ export default function AdminDashboard() {
                   <input ref={noticeFileRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg"
                     onChange={(e) => e.target.files[0] && setNoticeFile(e.target.files[0])} className="hidden" />
                 </div>
+
+                {/* Notice targeting — specific semester(s) or the whole branch */}
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl p-3 space-y-2">
+                  <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider">Send To</p>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={noticeBranchWide}
+                      onChange={toggleNoticeBranchWide}
+                      className="w-4 h-4 cursor-pointer accent-[var(--color-accent-solid)]"
+                    />
+                    <span className="text-[var(--color-text-primary)] text-sm font-medium">🏛️ Whole CSE(AIML) Branch (all semesters)</span>
+                  </label>
+                  <div className={`flex flex-wrap gap-2 ${noticeBranchWide ? "opacity-40 pointer-events-none" : ""}`}>
+                    {SEM_OPTIONS.map((sem) => (
+                      <button
+                        key={sem}
+                        type="button"
+                        onClick={() => toggleNoticeSemester(sem)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-all
+                          ${noticeSemesters.includes(sem) ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
+                        {sem}
+                      </button>
+                    ))}
+                  </div>
+                  {!noticeBranchWide && noticeSemesters.length === 0 && (
+                    <p className="text-amber-400 text-xs">⚠ No semester selected — the notice will still post, but without semester targeting.</p>
+                  )}
+                </div>
+
                 <div className="flex gap-3">
                   <select
                     value={noticeTag}
@@ -1074,6 +1220,11 @@ export default function AdminDashboard() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full">{n.tag}</span>
                         <span className="text-xs px-2 py-0.5 bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] rounded-full capitalize">{n.postedRole}</span>
+                        {(n.isBranchWide || (n.semesters && n.semesters.length > 0)) && (
+                          <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full">
+                            🎯 {n.isBranchWide ? "Whole Branch" : n.semesters.join(", ")}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[var(--color-text-primary)] text-sm font-medium">{n.title}</p>
                       {n.content && <p className="text-[var(--color-text-secondary)] text-xs mt-1">{n.content}</p>}
@@ -1149,6 +1300,33 @@ export default function AdminDashboard() {
 
         </main>
       </div>
+
+      {/* Confirm Bulk Promote Modal */}
+      {confirmBulkPromote && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[var(--color-text-primary)] font-bold text-lg mb-2">Confirm Bulk Promotion</h3>
+            <p className="text-[var(--color-text-secondary)] text-sm mb-2">
+              Promote <span className="text-[var(--color-text-primary)] font-medium">{confirmBulkPromote.students.length}</span> active student(s) from{" "}
+              <span className="text-[var(--color-text-primary)] font-medium">{confirmBulkPromote.fromSem}</span> to{" "}
+              <span className="text-[var(--color-text-primary)] font-medium">{confirmBulkPromote.toSem}</span>?
+            </p>
+            <p className="text-[var(--color-text-muted)] text-xs mb-6">
+              Detained, dropout, and transferred students in {confirmBulkPromote.fromSem} are not affected. Marks and attendance are preserved.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmBulkPromote(null)}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={executeBulkPromote} disabled={bulkPromoting}
+                className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                {bulkPromoting ? "Promoting..." : "Confirm Promote"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Remove Registration Modal */}
       {confirmRemoveReg && (
