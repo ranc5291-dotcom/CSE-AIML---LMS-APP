@@ -437,7 +437,7 @@ function InternalPanel({ assessment, subject, facultyId, students, allStudents, 
 // ══════════════════════════════════════════════════════════
 // INTERNAL MARKS MODAL
 // ══════════════════════════════════════════════════════════
-export default function InternalMarksModal({ subjectRow, facultyId, year, sem, students, allStudents, onClose }) {
+export default function InternalMarksModal({ subjectRow, facultyId, year, sem, students, allStudents, onClose, onCountChanged }) {
   const subject = subjectRow.subjects;
   const [assessments, setAssessments] = useState([]);
   const [configCount, setConfigCount] = useState(subject.num_internals || 1);
@@ -451,7 +451,7 @@ export default function InternalMarksModal({ subjectRow, facultyId, year, sem, s
   useEffect(() => {
     setConfigCount(subject.num_internals || 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subject.id]);
+  }, [subject.id, subject.num_internals]);
 
   const loadAssessments = async () => {
     setLoading(true);
@@ -461,6 +461,21 @@ export default function InternalMarksModal({ subjectRow, facultyId, year, sem, s
   };
 
   useEffect(() => { loadAssessments(); /* eslint-disable-next-line */ }, [subject.id, year, sem]);
+
+  // Realtime: if another faculty/admin session changes this subject's
+  // num_internals, or adds/edits assessment rows for it, refresh live
+  // instead of showing stale data until the modal is closed and reopened.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`internal-marks-sync-${subject.id}`)
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "subject_assessments", filter: `subject_id=eq.${subject.id}` },
+        () => { loadAssessments(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject.id, year, sem]);
 
   const handleApplyCount = async () => {
     setLoading(true);
@@ -507,6 +522,12 @@ export default function InternalMarksModal({ subjectRow, facultyId, year, sem, s
         `Students will keep seeing the old count until this is fixed — if this keeps happening, ` +
         `make sure your "subjects" table has an integer "num_internals" column.`
       );
+    } else {
+      // Tell the parent dashboard so its own copy of this subject's
+      // num_internals updates immediately — otherwise reopening this
+      // modal later re-seeds configCount from FacultyDashboard's stale
+      // in-memory value and it looks like the change didn't stick.
+      onCountChanged?.(subject.id, configCount);
     }
 
     const list = await getSubjectAssessments(subject.id, year, sem);

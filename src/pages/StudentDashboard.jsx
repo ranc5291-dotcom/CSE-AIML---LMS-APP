@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLMS, normalizeSubjectMarks } from "../context/LMSContext";
-import { getStudentMarksFull, getCatalogSubjects, getStudentAttendanceFull } from "../utils/supabase";
+import { supabase, getStudentMarksFull, getCatalogSubjects, getStudentAttendanceFull } from "../utils/supabase";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import PDFViewer from "../components/PDFViewer";
@@ -221,6 +221,28 @@ function MyMarksPanel({ sem, userId }) {
     };
   }, [userId, sem]);
 
+  // Realtime: refetch the moment a faculty member changes internals
+  // count, edits an assessment, publishes/unpublishes marks, or saves a
+  // mark — without the student needing to reload the page.
+  useEffect(() => {
+    if (!userId || !sem) return;
+    const yearLabel = getYearForSem(sem);
+    if (!yearLabel) return;
+
+    const refetch = () => {
+      getStudentMarksFull(userId, yearLabel, sem).then((d) => setMarksData(d || {}));
+    };
+
+    const channel = supabase
+      .channel(`student-marks-sync-${userId}-${sem}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "subject_assessments" }, refetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "marks", filter: `student_id=eq.${userId}` }, refetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "subjects" }, refetch)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, sem]);
+
   const subjectNames = Object.keys(marksData);
 
   return (
@@ -404,7 +426,7 @@ function PreviousPYQPanel({ notes }) {
               <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
               <p className="text-[var(--color-text-muted)] text-xs">{note.subject} · {note.sem} · {note.uploadedBy}</p>
             </div>
-            <a
+            
               href={note.fileUrl || "#"}
               target="_blank"
               rel="noreferrer"
@@ -463,6 +485,20 @@ export default function StudentDashboard() {
       }
     });
     return () => { cancelled = true; };
+  }, [currentYear, currentSem, hasSemester]);
+
+  // Realtime: if a subject is added, edited, deactivated, or restored in
+  // the catalog for this student's year+sem, refresh "Notes & Subjects"
+  // live rather than requiring a manual reload.
+  useEffect(() => {
+    if (!hasSemester) return;
+    const channel = supabase
+      .channel(`student-catalog-sync-${currentYear}-${currentSem}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "subjects" }, () => {
+        getCatalogSubjects(currentYear, currentSem).then(setCatalogSubjects);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [currentYear, currentSem, hasSemester]);
 
   useEffect(() => {

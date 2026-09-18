@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { useAuth, getAllStudents } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
 import {
+  supabase,
   getCatalogSubjects,
   addCatalogSubject, editCatalogSubject,
   deactivateCatalogSubject, restoreCatalogSubject,
@@ -71,6 +72,20 @@ function SubjectCatalogModal({ initialYear, initialSem, onClose, onChanged }) {
     setAddOpen(false);
     setEditingId(null);
     setRowMsg({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, sem]);
+
+  // Realtime: if another faculty/admin session adds, edits, deactivates,
+  // or restores a subject for this year+sem while this modal is open,
+  // refresh so the catalog list never goes stale mid-session.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`subject-catalog-sync-${year}-${sem}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "subjects" }, () => {
+        loadAll();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, sem]);
 
@@ -506,6 +521,26 @@ export default function FacultyDashboard() {
     if (!facultyId) return;
     loadMySubjects(selectedYear.label, selectedSem);
     setQuickJumpValue("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facultyId, selectedYear.label, selectedSem]);
+
+  // Realtime: keep "My Subjects" in sync when the catalog changes
+  // (subject added/edited/deactivated/restored — including by this same
+  // faculty in the Manage Subjects modal, or by anyone else) or when this
+  // faculty's own teaching-subject assignment changes elsewhere.
+  useEffect(() => {
+    if (!facultyId) return;
+    const channel = supabase
+      .channel(`faculty-dashboard-sync-${facultyId}-${selectedYear.label}-${selectedSem}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "subjects" }, () => {
+        loadMySubjects(selectedYear.label, selectedSem);
+      })
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "faculty_subjects", filter: `faculty_id=eq.${facultyId}` },
+        () => { loadMySubjects(selectedYear.label, selectedSem); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facultyId, selectedYear.label, selectedSem]);
 
@@ -1315,6 +1350,13 @@ export default function FacultyDashboard() {
           students={STUDENTS}
           allStudents={allStudents}
           onClose={() => { setMarksModalSubjectRow(null); setQuickJumpValue(""); }}
+          onCountChanged={(subjectId, newCount) => {
+            setMySubjects((prev) => prev.map((row) =>
+              row.subject_id === subjectId
+                ? { ...row, subjects: { ...row.subjects, num_internals: newCount } }
+                : row
+            ));
+          }}
         />
       )}
     </div>
