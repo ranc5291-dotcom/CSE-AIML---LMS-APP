@@ -315,29 +315,61 @@ function SubjectCatalogModal({ initialYear, initialSem, onClose, onChanged }) {
 function ManageSubjectsModal({ facultyId, initialYear, initialSem, onClose, onSaved }) {
   const [year, setYear] = useState(initialYear);
   const [sem, setSem] = useState(initialSem);
-  const [catalog, setCatalog] = useState([]);
+  const [activeCatalog, setActiveCatalog] = useState([]);
+  const [mySubjectRows, setMySubjectRows] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [removedNotice, setRemovedNotice] = useState([]);
 
   const currentYearObj = YEARS.find((y) => y.label === year) || YEARS[0];
+
+  // One-time-per-browser flag so the "removed from catalog" notice is
+  // shown to this faculty member once, not every time they open the modal.
+  const seenKey = (subjectId) => `tsn_seen_${facultyId}_${subjectId}`;
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     Promise.all([
-      getCatalogSubjects(year, sem),
-      getFacultySubjects(facultyId, year, sem),
+      getCatalogSubjects(year, sem),              // active subjects only
+      getFacultySubjects(facultyId, year, sem),    // what this faculty currently teaches
     ]).then(([subs, mine]) => {
       if (cancelled) return;
-      setCatalog(subs);
+      setActiveCatalog(subs);
+      setMySubjectRows(mine);
       setSelected(new Set(mine.map((r) => r.subject_id)));
+
+      const newlyInactive = mine.filter((r) => r.subjects?.is_active === false);
+      const notYetSeen = newlyInactive.filter((r) => !localStorage.getItem(seenKey(r.subject_id)));
+      setRemovedNotice(notYetSeen.map((r) => r.subjects?.subject_name).filter(Boolean));
+      notYetSeen.forEach((r) => localStorage.setItem(seenKey(r.subject_id), "1"));
+
       setLoading(false);
     });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facultyId, year, sem]);
 
-  const toggle = (subjectId) => {
+  // What actually gets rendered: every active catalog subject, PLUS any
+  // subject this faculty is CURRENTLY teaching even if it's since gone
+  // inactive (so they can see and deselect it). An inactive subject that
+  // isn't already selected never shows up — so once it's removed from
+  // the catalog, no faculty can newly pick it, ever again (unless restored).
+  const inactiveSelected = mySubjectRows
+    .filter((r) => r.subjects?.is_active === false)
+    .map((r) => ({
+      id: r.subject_id,
+      subject_name: r.subjects?.subject_name,
+      subject_code: r.subjects?.subject_code,
+      is_active: false,
+    }));
+
+  const displayList = [...activeCatalog, ...inactiveSelected];
+
+  const toggle = (subjectId, isActive) => {
+    // Inactive + not currently selected = can't be (re)checked at all.
+    if (!isActive && !selected.has(subjectId)) return;
     setSelected((p) => {
       const next = new Set(p);
       if (next.has(subjectId)) next.delete(subjectId);
@@ -364,6 +396,16 @@ function ManageSubjectsModal({ facultyId, initialYear, initialSem, onClose, onSa
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
+          {removedNotice.length > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 text-amber-300 text-xs">
+              ⚠️ {removedNotice.length === 1
+                ? `"${removedNotice[0]}" was removed from the subject catalog.`
+                : `The following subjects were removed from the subject catalog: ${removedNotice.join(", ")}.`}{" "}
+              You can still deselect {removedNotice.length === 1 ? "it" : "them"} below, but{" "}
+              {removedNotice.length === 1 ? "it" : "they"} can't be selected again unless restored to the catalog.
+            </div>
+          )}
+
           <div>
             <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-2">Year</p>
             <div className="flex gap-2 flex-wrap">
@@ -396,24 +438,37 @@ function ManageSubjectsModal({ facultyId, initialYear, initialSem, onClose, onSa
               Subjects available — {year}, {sem}
             </p>
             {loading && <p className="text-[var(--color-text-muted)] text-sm">Loading...</p>}
-            {!loading && catalog.length === 0 && (
+            {!loading && displayList.length === 0 && (
               <p className="text-[var(--color-text-muted)] text-sm">
                 No subjects found for {sem} in the catalog. Use "Manage Subjects" to add some first.
               </p>
             )}
             <div className="space-y-2">
-              {catalog.map((s) => (
-                <label key={s.id} className="flex items-center gap-3 bg-[var(--color-bg-surface-alt)] rounded-xl px-4 py-3 cursor-pointer border border-[var(--color-border)] hover:border-[var(--color-accent-solid)]/40">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(s.id)}
-                    onChange={() => toggle(s.id)}
-                    className="w-4 h-4 cursor-pointer accent-[var(--color-accent-solid)]"
-                  />
-                  <span className="text-[var(--color-text-primary)] text-sm font-medium">{s.subject_name}</span>
-                  {s.subject_code && <span className="text-[var(--color-text-muted)] text-xs ml-auto">{s.subject_code}</span>}
-                </label>
-              ))}
+              {displayList.map((s) => {
+                const isActive = s.is_active !== false;
+                const isSelected = selected.has(s.id);
+                const locked = !isActive;
+                return (
+                  <label key={s.id}
+                    className={`flex items-center gap-3 bg-[var(--color-bg-surface-alt)] rounded-xl px-4 py-3 border border-[var(--color-border)]
+                      ${locked ? "opacity-70 cursor-default" : "cursor-pointer hover:border-[var(--color-accent-solid)]/40"}`}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggle(s.id, isActive)}
+                      disabled={locked && !isSelected}
+                      className={locked && !isSelected ? "w-4 h-4" : "w-4 h-4 cursor-pointer accent-[var(--color-accent-solid)]"}
+                    />
+                    <span className="text-[var(--color-text-primary)] text-sm font-medium">{s.subject_name}</span>
+                    <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                      {s.subject_code && <span className="text-[var(--color-text-muted)] text-xs">{s.subject_code}</span>}
+                      {!isActive && (
+                        <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">Removed from catalog</span>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
         </div>

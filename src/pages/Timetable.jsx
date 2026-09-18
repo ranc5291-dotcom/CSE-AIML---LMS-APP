@@ -89,6 +89,31 @@ export default function Timetable() {
     await removeTimetable(id);
   };
 
+  // Cloudinary files are cross-origin, so the `download` attribute on a
+  // plain <a> is silently ignored by the browser (it just opens/previews
+  // the file instead of saving it). Fetching as a blob and saving from a
+  // blob URL forces an actual download regardless of file origin.
+  const handleDownload = async (fileUrl, fileName) => {
+    try {
+      const res = await fetch(fileUrl, { mode: "cors" });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName || "timetable";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      // Cloudinary CORS can block fetch for some resource types (e.g. raw PDFs
+      // served without proper CORS headers) — fall back to opening it directly
+      // so the user can still save it via the browser's own "Save as".
+      window.open(fileUrl, "_blank", "noreferrer");
+    }
+  };
+
   return (
     <div className="flex h-screen bg-[var(--color-bg-app)] overflow-hidden">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
@@ -184,9 +209,9 @@ export default function Timetable() {
                     View
                   </button>
                   <div className="w-px bg-[var(--color-border)]" />
-                  <a href={current.fileUrl} download={current.fileName} target="_blank" rel="noreferrer" className="flex-1 py-2.5 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer flex items-center justify-center transition-all">
+                  <button onClick={() => handleDownload(current.fileUrl, current.fileName)} className="flex-1 py-2.5 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer flex items-center justify-center transition-all">
                     Download
-                  </a>
+                  </button>
                   {isFaculty && (
                     <>
                       <div className="w-px bg-[var(--color-border)]" />
