@@ -459,10 +459,10 @@ export default function AdminDashboard() {
     <div className="flex h-screen bg-[var(--color-bg-app)] overflow-hidden">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Navbar onMenuClick={() => setMobileOpen(true)} title="Admin Panel" />
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-6 space-y-5 min-w-0">
 
           {/* Header */}
           <div className="bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] rounded-2xl p-5 text-white">
@@ -715,7 +715,7 @@ export default function AdminDashboard() {
                             {s.phone && <span>📱 {s.phone}</span>}
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2 flex-shrink-0">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:flex-shrink-0">
                           {status !== "dropout" && status !== "transferred" && (
                             <button onClick={() => handleAction(s.id, "promote")}
                               className="px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg text-xs font-medium cursor-pointer transition-all">

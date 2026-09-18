@@ -558,16 +558,23 @@ export async function saveMarksBulk(rows, updatedBy) {
 }
 
 // ── STUDENT-FACING: all marks for one student, one semester ──
+// ── STUDENT-FACING: all marks for one student, one semester ──
 export async function getStudentMarksFull(studentId, year, semLabel) {
   const yearN = yearNumber(year);
   const semN = semNumber(semLabel);
   if (!yearN || !semN) return {};
 
+  // !inner + is_active filter on the embedded "subjects" table: any
+  // assessment whose subject is inactive is dropped by Postgres itself,
+  // matching exactly what getCatalogSubjects() does for Notes & Subjects.
+  // This is the fix — without !inner, .eq("subjects.is_active", true)
+  // is silently ignored by PostgREST on a left join.
   const { data: assessments, error: aErr } = await supabase
     .from("subject_assessments")
-    .select("*, subjects(*)")
+    .select("*, subjects!inner(*)")
     .eq("academic_year", yearN)
     .eq("semester", semN)
+    .eq("subjects.is_active", true)
     .order("assessment_number", { ascending: true });
   if (aErr) { console.warn("getStudentMarksFull (assessments):", aErr.message); return {}; }
   if (!assessments || assessments.length === 0) return {};
@@ -583,23 +590,35 @@ export async function getStudentMarksFull(studentId, year, semLabel) {
   const markByAssessment = {};
   (marksRows || []).forEach((m) => { markByAssessment[m.assessment_id] = m; });
 
-  const result = {};
+  // Group by subject.id (not name) so two subjects that happen to share
+  // a name can never merge their internals together.
+  const bySubjectId = {};
   assessments.forEach((a) => {
-    const subjectName = a.subjects?.subject_name;
-    if (!subjectName) return;
-    if (!result[subjectName]) result[subjectName] = {};
+    const subj = a.subjects;
+    if (!subj?.subject_name) return;
+
+    // Respect the subject's configured internal count — mirrors
+    // InternalMarksModal's visibleAssessments filter exactly.
+    const limit = subj.num_internals;
+    if (limit && a.assessment_number > limit) return;
+
+    if (!bySubjectId[subj.id]) bySubjectId[subj.id] = { name: subj.subject_name, marks: {} };
     const label = `Internal ${a.assessment_number}`;
     const markRow = markByAssessment[a.id];
     const isPublished = !!a.is_published;
-    result[subjectName][label] = {
+    bySubjectId[subj.id].marks[label] = {
       scored: isPublished && markRow ? markRow.marks_obtained : null,
       total: a.max_marks,
       published: isPublished && !!markRow,
     };
   });
+
+  const result = {};
+  Object.values(bySubjectId).forEach(({ name, marks }) => {
+    result[name] = marks;
+  });
   return result;
 }
-
 // ══════════════════════════════════════════════════════════
 // CLEAR ACCOUNT DATA — deletes Supabase rows owned by `uid`,
 // including the profiles row and any granted extra roles.

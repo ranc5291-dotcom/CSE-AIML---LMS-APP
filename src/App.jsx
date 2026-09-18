@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LMSProvider } from "./context/LMSContext";
@@ -6,16 +6,20 @@ import { useFCM } from "./hooks/useFCM";
 import { PWAInstallProvider } from "./hooks/usePWAInstall";
 import Login from "./pages/Login";
 import SplashScreen from "./components/SplashScreen";
-import StudentDashboard from "./pages/StudentDashboard";
-import FacultyDashboard from "./pages/FacultyDashboard";
-import PlacementDashboard from "./pages/PlacementDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
-import ComplaintBox from "./pages/ComplaintBox";
-import Events from "./pages/Events";
-import Funds from "./pages/Funds";
-import Gallery from "./pages/Gallery";
-import Settings from "./pages/Settings";
-import Timetable from "./pages/Timetable";
+
+// Route-level code splitting — each page's JS is only downloaded when
+// that route is actually visited, instead of all four dashboards
+// (+ every sub-page) being bundled into the initial load.
+const StudentDashboard   = lazy(() => import("./pages/StudentDashboard"));
+const FacultyDashboard   = lazy(() => import("./pages/FacultyDashboard"));
+const PlacementDashboard = lazy(() => import("./pages/PlacementDashboard"));
+const AdminDashboard     = lazy(() => import("./pages/AdminDashboard"));
+const ComplaintBox       = lazy(() => import("./pages/ComplaintBox"));
+const Events             = lazy(() => import("./pages/Events"));
+const Funds              = lazy(() => import("./pages/Funds"));
+const Gallery            = lazy(() => import("./pages/Gallery"));
+const Settings           = lazy(() => import("./pages/Settings"));
+const Timetable          = lazy(() => import("./pages/Timetable"));
 
 const ROLE_ROUTES = {
   student: "/student",
@@ -80,6 +84,17 @@ function ProtectedRoute({ children, role }) {
   return children;
 }
 
+// Small, dependency-free fallback so lazy-loaded route chunks don't flash
+// a blank white screen while downloading. Uses your theme variables so it
+// matches dark/light mode.
+function RouteLoader() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-[var(--color-bg-app)]">
+      <div className="w-8 h-8 border-2 border-[var(--color-accent-solid)] border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 // Separate inner component so useFCM() has access to both the Router
 // context (useNavigate, for click-to-navigate on notifications) and the
 // Auth context (useAuth, to know which user to register FCM tokens for).
@@ -87,41 +102,43 @@ function AppContent() {
   useFCM();
 
   return (
-    <Routes>
-      <Route path="/" element={<RootRoute />} />
-      <Route path="/student" element={
-        <ProtectedRoute role="student"><StudentDashboard /></ProtectedRoute>
-      } />
-      <Route path="/faculty" element={
-        <ProtectedRoute role="faculty"><FacultyDashboard /></ProtectedRoute>
-      } />
-      <Route path="/placement" element={
-        <ProtectedRoute role="placement"><PlacementDashboard /></ProtectedRoute>
-      } />
-      {/* Redirect old/wrong path to correct placement route */}
-      <Route path="/placement-info" element={<Navigate to="/placement" replace />} />
-      <Route path="/admin" element={
-        <ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>
-      } />
-      <Route path="/complaints" element={
-        <ProtectedRoute><ComplaintBox /></ProtectedRoute>
-      } />
-      <Route path="/events" element={
-        <ProtectedRoute><Events /></ProtectedRoute>
-      } />
-      <Route path="/funds" element={
-        <ProtectedRoute><Funds /></ProtectedRoute>
-      } />
-      <Route path="/gallery" element={
-        <ProtectedRoute><Gallery /></ProtectedRoute>
-      } />
-      <Route path="/settings" element={
-        <ProtectedRoute><Settings /></ProtectedRoute>
-      } />
-      <Route path="/timetable" element={
-        <ProtectedRoute><Timetable /></ProtectedRoute>
-      } />
-    </Routes>
+    <Suspense fallback={<RouteLoader />}>
+      <Routes>
+        <Route path="/" element={<RootRoute />} />
+        <Route path="/student" element={
+          <ProtectedRoute role="student"><StudentDashboard /></ProtectedRoute>
+        } />
+        <Route path="/faculty" element={
+          <ProtectedRoute role="faculty"><FacultyDashboard /></ProtectedRoute>
+        } />
+        <Route path="/placement" element={
+          <ProtectedRoute role="placement"><PlacementDashboard /></ProtectedRoute>
+        } />
+        {/* Redirect old/wrong path to correct placement route */}
+        <Route path="/placement-info" element={<Navigate to="/placement" replace />} />
+        <Route path="/admin" element={
+          <ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>
+        } />
+        <Route path="/complaints" element={
+          <ProtectedRoute><ComplaintBox /></ProtectedRoute>
+        } />
+        <Route path="/events" element={
+          <ProtectedRoute><Events /></ProtectedRoute>
+        } />
+        <Route path="/funds" element={
+          <ProtectedRoute><Funds /></ProtectedRoute>
+        } />
+        <Route path="/gallery" element={
+          <ProtectedRoute><Gallery /></ProtectedRoute>
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute><Settings /></ProtectedRoute>
+        } />
+        <Route path="/timetable" element={
+          <ProtectedRoute><Timetable /></ProtectedRoute>
+        } />
+      </Routes>
+    </Suspense>
   );
 }
 

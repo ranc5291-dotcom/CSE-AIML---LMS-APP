@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import {
+  supabase,
   getSubjectAssessments, createAssessments, updateAssessmentMaxMarks,
   updateAssessmentPublish, getMarksForAssessment, saveMarksBulk,
 } from "../utils/supabase";
@@ -439,15 +440,23 @@ function InternalPanel({ assessment, subject, facultyId, students, allStudents, 
 export default function InternalMarksModal({ subjectRow, facultyId, year, sem, students, allStudents, onClose }) {
   const subject = subjectRow.subjects;
   const [assessments, setAssessments] = useState([]);
-  const [configCount, setConfigCount] = useState(1);
+  const [configCount, setConfigCount] = useState(subject.num_internals || 1);
   const [loading, setLoading] = useState(true);
   const [applyMsg, setApplyMsg] = useState("");
+
+  // configCount now comes from the subject's persisted num_internals
+  // setting, not from however many assessment rows happen to exist —
+  // that's what previously let stale/hidden internals leak through to
+  // the student dashboard regardless of what faculty had selected here.
+  useEffect(() => {
+    setConfigCount(subject.num_internals || 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject.id]);
 
   const loadAssessments = async () => {
     setLoading(true);
     const list = await getSubjectAssessments(subject.id, year, sem);
     setAssessments(list);
-    setConfigCount(list.length || 1);
     setLoading(false);
   };
 
@@ -470,6 +479,36 @@ export default function InternalMarksModal({ subjectRow, facultyId, year, sem, s
       }
     }
 
+    // Persist the selected count on the subject itself. This is the
+    // single source of truth the student dashboard reads to decide how
+    // many internals to show — without this, lowering the count here
+    // only hid rows in this modal's own view; the student side never
+    // knew the count had changed.
+    //
+    // Retry once on failure (covers transient network hiccups), and if it
+    // still fails, surface the ACTUAL Postgres error message instead of a
+    // generic one — a silent/generic failure here is exactly what let the
+    // faculty and student views drift out of sync (e.g. this fails on every
+    // attempt if the "subjects" table is missing the num_internals column).
+    let subjErr = (
+      await supabase.from("subjects").update({ num_internals: configCount }).eq("id", subject.id)
+    ).error;
+
+    if (subjErr) {
+      subjErr = (
+        await supabase.from("subjects").update({ num_internals: configCount }).eq("id", subject.id)
+      ).error;
+    }
+
+    if (subjErr) {
+      console.warn("Failed to persist num_internals:", subjErr.message);
+      setApplyMsg(
+        `Internals created, but the count couldn't be saved (${subjErr.message}). ` +
+        `Students will keep seeing the old count until this is fixed — if this keeps happening, ` +
+        `make sure your "subjects" table has an integer "num_internals" column.`
+      );
+    }
+
     const list = await getSubjectAssessments(subject.id, year, sem);
     setAssessments(list);
     setLoading(false);
@@ -478,6 +517,12 @@ export default function InternalMarksModal({ subjectRow, facultyId, year, sem, s
   const patchAssessment = (id, patch) => {
     setAssessments((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   };
+
+  // Only show internals up to the currently selected count. Internals
+  // beyond that are NOT deleted — their data (marks, max, publish state)
+  // stays intact in the database — they're just hidden from view until
+  // the count is raised again.
+  const visibleAssessments = assessments.filter((a) => a.assessment_number <= configCount);
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -510,18 +555,20 @@ export default function InternalMarksModal({ subjectRow, facultyId, year, sem, s
               Select the number of internal assessments conducted for this subject. Each internal gets its own maximum marks below.
             </p>
             {configCount < assessments.length && (
-              <p className="text-amber-400 text-xs">⚠ Reducing the count here won't delete existing internals — remove them individually if needed.</p>
+              <p className="text-amber-400 text-xs">
+                ⚠ {assessments.length - configCount} internal(s) beyond your selection are hidden, not deleted — increase the count to see them again.
+              </p>
             )}
             {applyMsg && <p className="text-red-400 text-xs">{applyMsg}</p>}
           </div>
 
           {loading ? (
             <p className="text-[var(--color-text-muted)] text-sm">Loading...</p>
-          ) : assessments.length === 0 ? (
+          ) : visibleAssessments.length === 0 ? (
             <p className="text-[var(--color-text-muted)] text-sm">Set a number of internals above and click Apply to begin.</p>
           ) : (
             <div className="space-y-3">
-              {assessments.map((a) => (
+              {visibleAssessments.map((a) => (
                 <InternalPanel
                   key={a.id}
                   assessment={a}
