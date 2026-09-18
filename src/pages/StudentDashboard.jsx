@@ -426,7 +426,7 @@ function PreviousPYQPanel({ notes }) {
               <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
               <p className="text-[var(--color-text-muted)] text-xs">{note.subject} · {note.sem} · {note.uploadedBy}</p>
             </div>
-            
+            <a
               href={note.fileUrl || "#"}
               target="_blank"
               rel="noreferrer"
