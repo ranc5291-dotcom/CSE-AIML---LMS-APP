@@ -6,8 +6,9 @@ pydantic[email]
 python-jose[cryptography]
 passlib[bcrypt]
 bcrypt
-firebase-admin
+firebase-admin>=6.5.0
 cloudinary
 python-multipart
 email-validator
 requests
+httpx
