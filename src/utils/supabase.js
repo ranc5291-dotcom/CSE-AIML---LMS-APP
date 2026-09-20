@@ -827,16 +827,21 @@ const { error } = await supabase
   if (error) { console.warn("saveAttendanceBulk:", error.message); return { ok: false, error: error.message }; }
   return { ok: true, count: payload.length };
 }
+// Only ACTIVE subjects are returned — same !inner + is_active pattern as
+// getStudentMarksFull, so removed/inactive subjects (e.g. "ML 2") never
+// show up on the student's Attendance tab. The rows themselves are kept
+// in the database (history is preserved), they're just not displayed.
 export async function getStudentAttendanceFull(studentId, year, semLabel) {
   const yearN = yearNumber(year);
   const semN = semNumber(semLabel);
   if (!yearN || !semN) return {};
   const { data, error } = await supabase
     .from("attendance")
-    .select("*, subjects(*)")
+    .select("*, subjects!inner(*)")
     .eq("student_id", studentId)
     .eq("academic_year", yearN)
-    .eq("semester", semN);
+    .eq("semester", semN)
+    .eq("subjects.is_active", true);
   if (error) { console.warn("getStudentAttendanceFull:", error.message); return {}; }
   const result = {};
   (data || []).forEach((row) => {

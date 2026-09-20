@@ -13,6 +13,7 @@ import {
   getMarksForAssessment, saveMarksBulk,
   getAttendanceForYearSem, saveAttendanceBulk,
 } from "../utils/supabase";
+import { downloadFile } from "../utils/download";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import PDFViewer from "../components/PDFViewer";
@@ -643,7 +644,11 @@ export default function FacultyDashboard() {
     return sortDir === "asc" ? cmp : -cmp;
   });
 
-  const subjectNames = mySubjects.map((r) => r.subjects?.subject_name).filter(Boolean);
+  // Only ACTIVE subjects are offered for Attendance, Notes and Assignments.
+  // "My Subjects" tab still uses the full mySubjects list so a removed
+  // subject can be seen (marked "Inactive — records only").
+  const activeSubjects = mySubjects.filter((r) => r.subjects?.is_active !== false);
+  const subjectNames = activeSubjects.map((r) => r.subjects?.subject_name).filter(Boolean);
 
   const handleUploadNote = async () => {
     if (!noteSubject || !selectedFile) { alert("Please select a subject and a file."); return; }
@@ -1060,8 +1065,8 @@ export default function FacultyDashboard() {
                           <button onClick={() => setPdfViewer({ fileUrl: note.fileUrl, fileName: note.file })}
                             className="flex-1 py-2 text-xs font-medium text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)] cursor-pointer">👁 Preview</button>
                           <div className="w-px bg-[var(--color-border)]" />
-                          <a href={note.fileUrl} target="_blank" rel="noreferrer" download={note.file}
-                            className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer text-center">⬇️ Download</a>
+                          <button onClick={() => downloadFile(note.fileUrl, note.file)}
+                            className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer text-center">⬇️ Download</button>
                         </div>
                       )}
                     </div>
@@ -1127,7 +1132,7 @@ export default function FacultyDashboard() {
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer ${sortBy === "usn" ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
                     USN {sortBy === "usn" && (sortDir === "asc" ? "▲" : "▼")}
                   </button>
-                  <button onClick={handleSaveAndNotifyAttendance} disabled={attendanceSaving || mySubjects.length === 0}
+                  <button onClick={handleSaveAndNotifyAttendance} disabled={attendanceSaving || activeSubjects.length === 0}
                     className="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white rounded-lg text-xs font-semibold cursor-pointer">
                     {attendanceSaving ? "Saving..." : "🔔 Save & Notify Students"}
                   </button>
@@ -1145,11 +1150,11 @@ export default function FacultyDashboard() {
                     <select
                       value={uploadSubjectId}
                       onChange={(e) => setUploadSubjectId(e.target.value)}
-                      disabled={mySubjects.length === 0}
+                      disabled={activeSubjects.length === 0}
                       className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm cursor-pointer disabled:opacity-40"
                     >
                       <option value="">— Select Subject —</option>
-                      {mySubjects.map((row) => (
+                      {activeSubjects.map((row) => (
                         <option key={row.subject_id} value={row.subject_id}>{row.subjects?.subject_name}</option>
                       ))}
                     </select>
@@ -1163,7 +1168,7 @@ export default function FacultyDashboard() {
                       if (!uploadSubjectId) { alert("Please select which subject this sheet is for, first."); return; }
                       attendanceUploadRef.current?.click();
                     }}
-                    disabled={mySubjects.length === 0}
+                    disabled={activeSubjects.length === 0}
                     className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-xs font-medium cursor-pointer whitespace-nowrap">
                     ⬆️ Upload Sheet
                   </button>
@@ -1191,7 +1196,7 @@ export default function FacultyDashboard() {
                     <thead>
                       <tr className="border-b border-[var(--color-border)]">
                         <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4 min-w-32">Student</th>
-                        {mySubjects.map((row) => (
+                        {activeSubjects.map((row) => (
                           <th key={row.id} className="text-[var(--color-text-secondary)] text-xs py-2 px-2 text-center min-w-32">
                             {row.subjects?.subject_name}
                             <div className="text-[10px] font-normal opacity-70">Attended / Total</div>
@@ -1206,7 +1211,7 @@ export default function FacultyDashboard() {
                             <p className="text-[var(--color-text-primary)] text-xs font-medium">{stu.name}</p>
                             <p className="text-[var(--color-text-muted)] text-xs">{stu.usn || stu.id}</p>
                           </td>
-                          {mySubjects.map((row) => {
+                          {activeSubjects.map((row) => {
                             const subjectId = row.subject_id;
                             const vals = attendanceEdits[stu.id]?.[subjectId] || { attended: "", total: "" };
                             return (
@@ -1316,10 +1321,10 @@ export default function FacultyDashboard() {
                         </p>
                       )}
                       {n.fileUrl && (
-                        <a href={n.fileUrl} target="_blank" rel="noreferrer" download={n.fileName}
-                          className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs font-medium hover:opacity-80">
+                        <button onClick={() => downloadFile(n.fileUrl, n.fileName || "attachment")}
+                          className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs font-medium hover:opacity-80 cursor-pointer">
                           📎 {n.fileName || "Attachment"}
-                        </a>
+                        </button>
                       )}
                     </div>
                     <button onClick={() => removeNotice(n.id)} className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer text-sm flex-shrink-0">🗑️</button>
@@ -1357,6 +1362,10 @@ export default function FacultyDashboard() {
                       <div className="p-2">
                         <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{g.caption}</p>
                       </div>
+                      {g.url && (
+                        <button onClick={() => downloadFile(g.url, `${g.caption || "photo"}.jpg`)}
+                          className="absolute top-2 left-2 w-6 h-6 bg-black/60 hover:bg-green-600 rounded-lg flex items-center justify-center text-white text-xs cursor-pointer opacity-0 group-hover:opacity-100 transition-all">⬇️</button>
+                      )}
                       <button onClick={() => removeGalleryPhoto(g.id)}
                         className="absolute top-2 right-2 w-6 h-6 bg-black/60 hover:bg-red-600 rounded-lg flex items-center justify-center text-white text-xs cursor-pointer opacity-0 group-hover:opacity-100 transition-all">🗑️</button>
                     </div>

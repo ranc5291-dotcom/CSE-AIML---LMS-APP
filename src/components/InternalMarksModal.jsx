@@ -5,13 +5,20 @@ import {
   getSubjectAssessments, createAssessments, updateAssessmentMaxMarks,
   updateAssessmentPublish, getMarksForAssessment, saveMarksBulk,
 } from "../utils/supabase";
+import { useLMS } from "../context/LMSContext";
+import { useAuth } from "../context/AuthContext";
 
 // ══════════════════════════════════════════════════════════
 // ONE INTERNAL'S PANEL — self-contained: owns its own max-marks
 // editing, manual entry, CSV/Excel upload, and publish state.
 // Collapsible so 5 internals stays scannable.
 // ══════════════════════════════════════════════════════════
-function InternalPanel({ assessment, subject, facultyId, students, allStudents, onMaxMarksSaved, onPublishChanged }) {
+function InternalPanel({ assessment, subject, facultyId, year, sem, students, allStudents, onMaxMarksSaved, onPublishChanged }) {
+  const lms = useLMS();
+  const auth = useAuth();
+  const notifyAcademicUpdate = lms?.notifyAcademicUpdate;
+  const facultyName = auth?.user?.name;
+
   const [expanded, setExpanded] = useState(true);
   const [maxMarksInput, setMaxMarksInput] = useState(assessment.max_marks);
   const [savingMax, setSavingMax] = useState(false);
@@ -124,10 +131,33 @@ function InternalPanel({ assessment, subject, facultyId, students, allStudents, 
 
   const handlePublishToggle = async () => {
     if (!assessment.is_published && !marksUsable) return;
+    const wasPublished = !!assessment.is_published;
     setPublishing(true);
-    const res = await updateAssessmentPublish(assessment.id, !assessment.is_published);
+    const res = await updateAssessmentPublish(assessment.id, !wasPublished);
     setPublishing(false);
-    if (res.ok) onPublishChanged(assessment.id, !assessment.is_published);
+    if (res.ok) {
+      onPublishChanged(assessment.id, !wasPublished);
+
+      // Marks stay hidden from students until published, so THIS is the
+      // moment they should hear about it — an on-screen pop-up for
+      // students who have the app open, plus a push notification for
+      // students who don't. Scoped to this year + semester. A failure
+      // here never blocks or undoes the publish itself.
+      if (!wasPublished && notifyAcademicUpdate) {
+        try {
+          await notifyAcademicUpdate({
+            title: `Internal ${assessment.assessment_number} Marks Published — ${subject.subject_name}`,
+            body: `Your Internal ${assessment.assessment_number} marks for ${subject.subject_name} are now available.`,
+            year,
+            semester: sem,
+            postedBy: facultyName || "Faculty",
+            url: "/student",
+          });
+        } catch (err) {
+          console.warn("Marks published, but the notification failed:", err?.message || err);
+        }
+      }
+    }
   };
 
   // ── CSV / Excel upload ──
@@ -575,11 +605,6 @@ export default function InternalMarksModal({ subjectRow, facultyId, year, sem, s
             <p className="text-[var(--color-text-muted)] text-xs">
               Select the number of internal assessments conducted for this subject. Each internal gets its own maximum marks below.
             </p>
-            {configCount < assessments.length && (
-              <p className="text-amber-400 text-xs">
-                ⚠ {assessments.length - configCount} internal(s) beyond your selection are hidden, not deleted — increase the count to see them again.
-              </p>
-            )}
             {applyMsg && <p className="text-red-400 text-xs">{applyMsg}</p>}
           </div>
 
@@ -595,6 +620,8 @@ export default function InternalMarksModal({ subjectRow, facultyId, year, sem, s
                   assessment={a}
                   subject={subject}
                   facultyId={facultyId}
+                  year={year}
+                  sem={sem}
                   students={students}
                   allStudents={allStudents}
                   onMaxMarksSaved={(id, val) => patchAssessment(id, { max_marks: val })}

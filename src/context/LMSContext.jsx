@@ -611,7 +611,7 @@ export function LMSProvider({ children }) {
     sendNotification({
       title: `New Assignment — ${data.subject || data.title}`,
       body: data.due ? `Due ${data.due}` : "Check the assignment details",
-      url: "/student/assignments",
+      url: "/student",
       role: "student",
       year: SEM_TO_YEAR[data.sem] || null,
       semester: data.sem || null,
