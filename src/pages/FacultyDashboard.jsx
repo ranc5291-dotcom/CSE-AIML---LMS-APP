@@ -537,6 +537,7 @@ export default function FacultyDashboard() {
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeTag, setNoticeTag] = useState("Notice");
+  const [noticeCustomTag, setNoticeCustomTag] = useState("");
   const [noticeFile, setNoticeFile] = useState(null);
   const [noticePosting, setNoticePosting] = useState(false);
   const noticeFileRef = useRef(null);
@@ -826,15 +827,18 @@ export default function FacultyDashboard() {
   // Notice can be posted as a plain message, or with an optional
   // attachment (PDF, image, etc.) — addNotice uploads it to Cloudinary.
   // Target can be one or more specific semesters, or the whole branch.
+  // If "Other" is selected as the type, the custom text the faculty typed
+  // is used as the tag instead (falls back to "Notice" if left blank).
   const handlePostNotice = async () => {
     if (!noticeTitle.trim()) return;
+    const finalTag = noticeTag === "Other" ? (noticeCustomTag.trim() || "Notice") : noticeTag;
     setNoticePosting(true);
     try {
       await addNotice(
         {
           title: noticeTitle,
           content: noticeContent,
-          tag: noticeTag,
+          tag: finalTag,
           postedBy: user?.name,
           postedRole: "faculty",
           semesters: noticeBranchWide ? [] : noticeSemesters,
@@ -842,7 +846,7 @@ export default function FacultyDashboard() {
         },
         noticeFile
       );
-      setNoticeTitle(""); setNoticeContent(""); setNoticeTag("Notice");
+      setNoticeTitle(""); setNoticeContent(""); setNoticeTag("Notice"); setNoticeCustomTag("");
       setNoticeFile(null);
       setNoticeSemesters([]); setNoticeBranchWide(false);
       if (noticeFileRef.current) noticeFileRef.current.value = "";
@@ -1297,11 +1301,19 @@ export default function FacultyDashboard() {
                   )}
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <select value={noticeTag} onChange={(e) => setNoticeTag(e.target.value)}
                     className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm cursor-pointer">
-                    {["Notice", "Exam", "Event", "Holiday", "Urgent"].map((t) => <option key={t}>{t}</option>)}
+                    {["Notice", "Exam", "Event", "Holiday", "Urgent", "Other"].map((t) => <option key={t}>{t}</option>)}
                   </select>
+                  {noticeTag === "Other" && (
+                    <input
+                      value={noticeCustomTag}
+                      onChange={(e) => setNoticeCustomTag(e.target.value)}
+                      placeholder="Type your custom notice type..."
+                      className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm min-w-40"
+                    />
+                  )}
                   <button onClick={handlePostNotice} disabled={!noticeTitle.trim() || noticePosting}
                     className="flex-1 px-4 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer">
                     {noticePosting ? "⏳ Posting..." : "📌 Post Notice"}

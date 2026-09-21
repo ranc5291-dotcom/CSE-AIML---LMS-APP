@@ -333,7 +333,16 @@ export function AuthProvider({ children }) {
         return { success: false, error: "Account created but saving your profile failed: " + insertErr.message };
       }
 
-      return { success: true, user: { ...newProfile, uid: fbUser.uid } };
+      // Log the person straight in, same as a normal login would, so
+      // Register & Continue lands them directly on their dashboard
+      // instead of sending them back to the sign-in form.
+      const roles = await resolveRoles(newProfile.role, newProfile.id);
+      const sessionUser = { ...newProfile, uid: fbUser.uid, roles, activeRole: newProfile.role };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
+      setUser(sessionUser);
+      bump();
+
+      return { success: true, user: sessionUser };
 
     } catch (err) {
       const code = err?.code || "";

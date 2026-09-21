@@ -48,9 +48,16 @@ async def send_notification(data: NotificationCreate):
     if not tokens:
         raise HTTPException(404, "No registered devices found for the given target.")
 
+    # data-only payload: FCM auto-displays a system notification when a
+    # top-level `notification` field is present, which duplicates the one
+    # our own onBackgroundMessage/onForegroundMessage handlers already show.
+    # Sending everything under `data` keeps display fully in our control.
     message = messaging.MulticastMessage(
-        notification=messaging.Notification(title=data.title, body=data.body),
-        data={"url": data.url or "/"},
+        data={
+            "title": data.title,
+            "body": data.body,
+            "url": data.url or "/",
+        },
         tokens=tokens,
     )
 

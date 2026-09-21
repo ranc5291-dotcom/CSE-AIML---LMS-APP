@@ -215,6 +215,7 @@ function EmailVerifyBlock({ email, verified, onVerified }) {
 // ── REGISTER FORMS ────────────────────────────────────────────
 function StudentRegisterForm({ onBack, onSuccess }) {
   const { registerUser } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "", usn: "", email: "", phone: "",
     password: "", confirmPassword: "",
@@ -278,9 +279,9 @@ function StudentRegisterForm({ onBack, onSuccess }) {
         return;
       }
 
-      setSuccess(`✅ Registered! Sign in with your email: ${form.email.trim()}`);
+      setSuccess(`✅ Registered! Taking you to your dashboard...`);
       setLoading(false);
-      setTimeout(() => onSuccess(form.email.trim()), 2000);
+      setTimeout(() => navigate("/student"), 1200);
 
     } catch (err) {
       setError("Something went wrong: " + err.message);
@@ -364,6 +365,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
 function StaffRegisterForm({ role, onBack, onSuccess }) {
   const { registerUser } = useAuth();
   const config = ROLE_CONFIG[role];
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "", email: "", phone: "", password: "", confirmPassword: "",
     branch: "CSEAIML", subject: "", dept: "CSEAIML",
@@ -418,9 +420,9 @@ function StaffRegisterForm({ role, onBack, onSuccess }) {
         return;
       }
 
-      setSuccess(`✅ Registered! Sign in with your email: ${form.email.trim()}`);
+      setSuccess(`✅ Registered! Taking you to your dashboard...`);
       setLoading(false);
-      setTimeout(() => onSuccess(form.email.trim()), 2000);
+      setTimeout(() => navigate(config.route), 1200);
 
     } catch (err) {
       setError("Something went wrong: " + err.message);

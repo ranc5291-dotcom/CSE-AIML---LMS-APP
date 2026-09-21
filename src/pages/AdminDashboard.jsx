@@ -119,6 +119,7 @@ export default function AdminDashboard() {
   const [noticeTitle, setNoticeTitle]     = useState("");
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeTag, setNoticeTag]         = useState("Notice");
+  const [noticeCustomTag, setNoticeCustomTag] = useState("");
   const [noticeFile, setNoticeFile]       = useState(null);
   const [noticePosting, setNoticePosting] = useState(false);
   const noticeFileRef = useRef(null);
@@ -297,15 +298,18 @@ export default function AdminDashboard() {
   // attachment (PDF, image, etc.) — addNotice uploads it to Cloudinary,
   // same as on the Faculty dashboard. Target can be one or more specific
   // semesters, or the whole branch.
+  // If "Other" is selected as the type, the custom text the admin typed
+  // is used as the tag instead (falls back to "Notice" if left blank).
   const handlePostNotice = async () => {
     if (!noticeTitle.trim()) return;
+    const finalTag = noticeTag === "Other" ? (noticeCustomTag.trim() || "Notice") : noticeTag;
     setNoticePosting(true);
     try {
       await addNotice(
         {
           title: noticeTitle,
           content: noticeContent,
-          tag: noticeTag,
+          tag: finalTag,
           postedBy: user?.name,
           postedRole: "admin",
           semesters: noticeBranchWide ? [] : noticeSemesters,
@@ -316,6 +320,7 @@ export default function AdminDashboard() {
       setNoticeTitle("");
       setNoticeContent("");
       setNoticeTag("Notice");
+      setNoticeCustomTag("");
       setNoticeFile(null);
       setNoticeSemesters([]);
       setNoticeBranchWide(false);
@@ -468,7 +473,7 @@ export default function AdminDashboard() {
           <div className="bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] rounded-2xl p-5 text-white">
             <p className="text-white/80 text-sm mb-1">Admin Panel 🛡️</p>
             <h2 className="text-2xl font-bold">{user?.name}</h2>
-            <p className="text-white/80 text-sm mt-1">CSEAIML · Full Access · {user?.id}</p>
+            <p className="text-white/80 text-sm mt-1">CSEAIML · Full Access</p>
           </div>
 
           {/* Tabs */}
@@ -567,7 +572,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{l.user_name}</p>
-                        <p className="text-[var(--color-text-muted)] text-xs">{l.usn}</p>
+                        {l.role === "student" && <p className="text-[var(--color-text-muted)] text-xs">{l.usn}</p>}
                       </div>
                       <div className="text-right flex-shrink-0">
                         <span className={`text-xs px-2 py-0.5 rounded-full capitalize
@@ -776,7 +781,6 @@ export default function AdminDashboard() {
                           <div className="flex-1 min-w-0">
                             <p className="text-[var(--color-text-primary)] font-semibold text-sm">{f.name}</p>
                             <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)] mt-1">
-                              <span>🪪 {f.id}</span>
                               <span>📚 {f.subject || "—"}</span>
                               <span>🏛️ {f.branch || "CSEAIML"}</span>
                             </div>
@@ -822,7 +826,6 @@ export default function AdminDashboard() {
                           <div className="flex-1 min-w-0">
                             <p className="text-[var(--color-text-primary)] font-semibold text-sm">{p.name}</p>
                             <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)] mt-1">
-                              <span>🪪 {p.id}</span>
                               <span>🏛️ {p.dept || p.branch || "CSEAIML"}</span>
                             </div>
                             <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-muted)] mt-1">
@@ -862,7 +865,6 @@ export default function AdminDashboard() {
                           <div className="flex-1 min-w-0">
                             <p className="text-[var(--color-text-primary)] font-semibold text-sm">{a.name}</p>
                             <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)] mt-1">
-                              <span>🪪 {a.id}</span>
                               <span>🏛️ {a.dept || "CSEAIML"}</span>
                             </div>
                             <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-muted)] mt-1">
@@ -1193,14 +1195,22 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <select
                     value={noticeTag}
                     onChange={(e) => setNoticeTag(e.target.value)}
                     className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer"
                   >
-                    {["Notice", "Exam", "Event", "Holiday", "Urgent"].map((t) => <option key={t}>{t}</option>)}
+                    {["Notice", "Exam", "Event", "Holiday", "Urgent", "Other"].map((t) => <option key={t}>{t}</option>)}
                   </select>
+                  {noticeTag === "Other" && (
+                    <input
+                      value={noticeCustomTag}
+                      onChange={(e) => setNoticeCustomTag(e.target.value)}
+                      placeholder="Type your custom notice type..."
+                      className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm min-w-40"
+                    />
+                  )}
                   <button
                     onClick={handlePostNotice}
                     disabled={!noticeTitle.trim() || noticePosting}
