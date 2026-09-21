@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLMS, normalizeSubjectMarks } from "../context/LMSContext";
 import { supabase, getStudentMarksFull, getCatalogSubjects, getStudentAttendanceFull } from "../utils/supabase";
+import { downloadFile } from "../utils/download";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import PDFViewer from "../components/PDFViewer";
@@ -117,7 +118,7 @@ function SubjectPopup({ subject, sem, notes, assignments, onClose, onOpenPDF }) 
                     <div className="flex border-t border-[var(--color-border)]">
                       <button onClick={() => onOpenPDF(note.fileUrl, note.file)} disabled={!note.fileUrl} className={viewClass}>View</button>
                       <div className="w-px bg-[var(--color-border)]" />
-                      <a href={note.fileUrl || "#"} target="_blank" rel="noreferrer" download={note.file} className={downloadClass}>Download</a>
+                      <button type="button" onClick={() => downloadFile(note.fileUrl, note.file)} disabled={!note.fileUrl} className={downloadClass}>Download</button>
                     </div>
                   </div>
                 );
@@ -147,9 +148,9 @@ function SubjectPopup({ subject, sem, notes, assignments, onClose, onOpenPDF }) 
                         View
                       </button>
                       <div className="w-px bg-[var(--color-border)]" />
-                      <a href={a.fileUrl} download={a.title} target="_blank" rel="noreferrer" className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer flex items-center justify-center gap-1">
+                      <button type="button" onClick={() => downloadFile(a.fileUrl, a.file || a.title)} className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer flex items-center justify-center gap-1">
                         Download
-                      </a>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -426,17 +427,16 @@ function PreviousPYQPanel({ notes }) {
               <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
               <p className="text-[var(--color-text-muted)] text-xs">{note.subject} · {note.sem} · {note.uploadedBy}</p>
             </div>
-            <a
-              href={note.fileUrl || "#"}
-              target="_blank"
-              rel="noreferrer"
-              download={note.file}
+            <button
+              type="button"
+              onClick={() => downloadFile(note.fileUrl, note.file)}
+              disabled={!note.fileUrl}
               className={note.fileUrl
                 ? "px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs hover:bg-green-500/20 cursor-pointer flex-shrink-0"
                 : "px-3 py-1.5 bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] rounded-lg text-xs pointer-events-none flex-shrink-0"}
             >
               Download
-            </a>
+            </button>
           </div>
         ))}
       </div>
@@ -691,9 +691,9 @@ export default function StudentDashboard() {
                             View
                           </button>
                           <div className="w-px bg-[var(--color-border)]" />
-                          <a href={a.fileUrl} download={a.title} target="_blank" rel="noreferrer" className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer flex items-center justify-center gap-1">
+                          <button type="button" onClick={() => downloadFile(a.fileUrl, a.file || a.title)} className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer flex items-center justify-center gap-1">
                             Download
-                          </a>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -826,7 +826,7 @@ export default function StudentDashboard() {
                         <div className="flex border-t border-[var(--color-border)]">
                           <button onClick={() => openPDF(note.fileUrl, note.file)} disabled={!note.fileUrl} className={viewClass}>View</button>
                           <div className="w-px bg-[var(--color-border)]" />
-                          <a href={note.fileUrl || "#"} target="_blank" rel="noreferrer" download={note.file} className={downloadClass}>Download</a>
+                          <button type="button" onClick={() => downloadFile(note.fileUrl, note.file)} disabled={!note.fileUrl} className={downloadClass}>Download</button>
                         </div>
                       </div>
                     );
@@ -907,11 +907,15 @@ export default function StudentDashboard() {
                               View
                             </button>
                           )}
-                          {(item.fileUrl || item.link) && (
-                            <a href={item.fileUrl || item.link} target="_blank" rel="noreferrer" download={item.fileName || undefined} className="px-3 py-1.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs hover:opacity-80 transition-all">
-                              {item.fileUrl ? "Download" : "Open"}
+                          {item.fileUrl ? (
+                            <button type="button" onClick={() => downloadFile(item.fileUrl, item.fileName || item.title)} className="px-3 py-1.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs hover:opacity-80 transition-all cursor-pointer">
+                              Download
+                            </button>
+                          ) : item.link ? (
+                            <a href={item.link} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs hover:opacity-80 transition-all">
+                              Open
                             </a>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     ))}
