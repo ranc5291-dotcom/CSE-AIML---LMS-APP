@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 
-function isIosSafari() {
+// Catches ALL iOS browsers (Safari, Chrome, Firefox, Edge, etc.) — on iOS,
+// every browser runs on Apple's WebKit engine under the hood, so none of
+// them support `beforeinstallprompt` or any native install flow. Only the
+// UI copy differs slightly between browsers for "Add to Home Screen".
+function isIosDevice() {
   const ua = window.navigator.userAgent;
-  const isIos = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-  return isIos && isSafari;
+  return /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
 }
 
 function isRunningStandalone() {
@@ -26,7 +28,7 @@ export function PWAInstallProvider({ children }) {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(() => isRunningStandalone());
-  const [isIos] = useState(() => isIosSafari());
+  const [isIos] = useState(() => isIosDevice());
 
   useEffect(() => {
     if (isRunningStandalone()) {
