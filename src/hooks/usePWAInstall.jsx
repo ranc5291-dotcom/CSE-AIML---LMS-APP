@@ -1,19 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 
-<<<<<<< HEAD
-// Catches ALL iOS browsers (Safari, Chrome, Firefox, Edge, etc.) — on iOS,
-// every browser runs on Apple's WebKit engine under the hood, so none of
-// them support `beforeinstallprompt` or any native install flow. Only the
-// UI copy differs slightly between browsers for "Add to Home Screen".
-function isIosDevice() {
-  const ua = window.navigator.userAgent;
-=======
 function isIosDevice() {
   const ua = window.navigator.userAgent;
   // Any iOS browser (Safari, Chrome/CriOS, Firefox/FxiOS, Edge/EdgiOS) —
   // they're all WebKit under the hood on iOS, and none of them support
   // `beforeinstallprompt`. So we detect the OS, not the specific browser.
->>>>>>> 420a8b0 (Update LMS features and PWA installation)
   return /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
 }
 
