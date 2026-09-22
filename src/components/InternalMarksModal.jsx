@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import * as XLSX from "xlsx";
+
 import {
   supabase,
   getSubjectAssessments, createAssessments, updateAssessmentMaxMarks,
@@ -161,8 +161,9 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
   };
 
   // ── CSV / Excel upload ──
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async() => {
     if (students.length === 0) return;
+    const XLSX = await import("xlsx");
     const rows = students.map((stu) => ({
       USN: stu.usn || stu.id,
       "Student Name": stu.name || "",
@@ -177,6 +178,7 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
   const handleValidate = async () => {
     if (!excelFile) return;
     setExcelFormatError("");
+    const XLSX = await import("xlsx");
     let rows;
     try {
       const buffer = await excelFile.arrayBuffer();

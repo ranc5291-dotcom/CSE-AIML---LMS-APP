@@ -7,7 +7,7 @@ function IosInstructionsModal({ onClose }) {
       <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-sm p-6 text-center shadow-2xl">
         <h2 className="text-[var(--color-text-primary)] font-bold text-lg mb-3">Add to Home Screen</h2>
         <ol className="text-[var(--color-text-secondary)] text-sm text-left space-y-2 mb-5 list-decimal list-inside">
-          <li>Tap the <strong>Share</strong> icon in Safari's toolbar</li>
+          <li>Tap the <strong>Share</strong> icon (square with an arrow) in your browser's toolbar</li>
           <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
           <li>Tap <strong>Add</strong> in the top-right corner</li>
         </ol>
@@ -29,7 +29,8 @@ export default function InstallAppButton({ className = "" }) {
   // Already installed — render nothing, ever.
   if (isInstalled) return null;
 
-  // iOS Safari can never get a native prompt — show instructions instead.
+  // Any iOS browser (Safari, Chrome, Firefox, Edge) can never get a native
+  // prompt — show Add-to-Home-Screen instructions instead.
   if (isIos) {
     return (
       <>

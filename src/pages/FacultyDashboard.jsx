@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import * as XLSX from "xlsx";
+
 import { useAuth, getAllStudents } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
 import {
@@ -695,7 +695,8 @@ export default function FacultyDashboard() {
   // Downloads a ready-to-fill spreadsheet for the currently visible
   // students: Name, USN, Attended, Total. Faculty fill in Attended/Total
   // and re-upload it — matching happens by USN (falls back to Name).
-  const handleDownloadAttendanceTemplate = () => {
+  const handleDownloadAttendanceTemplate = async () => {
+  const XLSX = await import("xlsx");
     const rows = STUDENTS.length > 0
       ? STUDENTS.map((s) => ({ Name: s.name, USN: s.usn || s.id, Attended: "", Total: "" }))
       : [{ Name: "", USN: "", Attended: "", Total: "" }];
@@ -710,16 +711,19 @@ export default function FacultyDashboard() {
   // Attended, Total and fills the on-screen Attended/Total inputs for the
   // chosen subject — it does NOT save to the database by itself. Faculty
   // still review the filled-in table and hit "Save & Notify Students".
-  const handleAttendanceFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!uploadSubjectId) {
-      alert("Please select which subject this sheet is for, first.");
-      if (attendanceUploadRef.current) attendanceUploadRef.current.value = "";
-      return;
-    }
+  const handleAttendanceFileUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!uploadSubjectId) {
+    alert("Please select which subject this sheet is for, first.");
+    if (attendanceUploadRef.current) attendanceUploadRef.current.value = "";
+    return;
+  }
 
-    const reader = new FileReader();
+  const XLSX = await import("xlsx");
+
+  const reader = new FileReader();
+
     reader.onload = (evt) => {
       try {
         const data = new Uint8Array(evt.target.result);

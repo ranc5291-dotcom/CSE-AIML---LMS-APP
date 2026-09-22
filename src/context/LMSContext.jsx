@@ -3,6 +3,7 @@ import { db } from "../utils/firebase";
 import {
   collection, onSnapshot, addDoc, deleteDoc,
   doc, serverTimestamp, query, orderBy, updateDoc,
+  getDocs, where, setDoc,
 } from "firebase/firestore";
 import { attendanceAPI, marksAPI, sendNotification } from "../utils/api";
 import { uploadPlacementFile, deletePlacementFile, saveEventRegistration } from "../utils/supabase";
@@ -196,14 +197,13 @@ export function LMSProvider({ children }) {
   const addSubject = async (sem, name) => {
     setSubjects((p) => ({ ...p, [sem]: [...(p[sem] || []), name] }));
     try {
-      const { getDocs, query: q2, where, setDoc, updateDoc: upd } = await import("firebase/firestore");
-      const snap = await getDocs(q2(collection(db, "subjects"), where("sem", "==", sem)));
+      const snap = await getDocs(query(collection(db, "subjects"), where("sem", "==", sem)));
       if (snap.empty) {
         await setDoc(doc(db, "subjects", sem), { sem, subjects: [...(INITIAL_SUBJECTS[sem] || []), name], updatedAt: serverTimestamp() });
       } else {
         const ref  = snap.docs[0].ref;
         const curr = snap.docs[0].data().subjects || [];
-        if (!curr.includes(name)) await upd(ref, { subjects: [...curr, name], updatedAt: serverTimestamp() });
+        if (!curr.includes(name)) await updateDoc(ref, { subjects: [...curr, name], updatedAt: serverTimestamp() });
       }
     } catch (e) { console.warn("addSubject:", e.message); }
   };
@@ -211,12 +211,11 @@ export function LMSProvider({ children }) {
   const removeSubject = async (sem, name) => {
     setSubjects((p) => ({ ...p, [sem]: (p[sem] || []).filter((s) => s !== name) }));
     try {
-      const { getDocs, query: q2, where, updateDoc: upd } = await import("firebase/firestore");
-      const snap = await getDocs(q2(collection(db, "subjects"), where("sem", "==", sem)));
+      const snap = await getDocs(query(collection(db, "subjects"), where("sem", "==", sem)));
       if (!snap.empty) {
         const ref  = snap.docs[0].ref;
         const curr = snap.docs[0].data().subjects || [];
-        await upd(ref, { subjects: curr.filter((s) => s !== name), updatedAt: serverTimestamp() });
+        await updateDoc(ref, { subjects: curr.filter((s) => s !== name), updatedAt: serverTimestamp() });
       }
     } catch (e) { console.warn("removeSubject:", e.message); }
   };
@@ -227,8 +226,7 @@ export function LMSProvider({ children }) {
       [sem]: { ...(p[sem] || {}), [subject]: count },
     }));
     try {
-      const { setDoc: sd } = await import("firebase/firestore");
-      await sd(
+      await setDoc(
         doc(db, "subjectInternals", sem),
         { sem, internals: { [subject]: count }, updatedAt: serverTimestamp() },
         { merge: true }
@@ -420,16 +418,15 @@ export function LMSProvider({ children }) {
   const updateAttendance = async (studentId, subject, value, studentName = "", sem = "") => {
     setAttendance((p) => ({ ...p, [studentId]: { ...(p[studentId] || {}), [subject]: value } }));
     try {
-      const { getDocs, query: q2, where, setDoc: sd, updateDoc: upd } = await import("firebase/firestore");
-      const snap = await getDocs(q2(collection(db, "attendance"), where("studentId", "==", studentId)));
+      const snap = await getDocs(query(collection(db, "attendance"), where("studentId", "==", studentId)));
       if (snap.empty) {
-        await sd(doc(db, "attendance", studentId), {
+        await setDoc(doc(db, "attendance", studentId), {
           studentId, studentName, sem,
           attendance: { [subject]: value },
           updatedAt: serverTimestamp(),
         });
       } else {
-        await upd(snap.docs[0].ref, {
+        await updateDoc(snap.docs[0].ref, {
           [`attendance.${subject}`]: value,
           updatedAt: serverTimestamp(),
         });
@@ -446,8 +443,7 @@ export function LMSProvider({ children }) {
       },
     }));
     try {
-      const { setDoc: sd } = await import("firebase/firestore");
-      await sd(
+      await setDoc(
         doc(db, "marks", studentId),
         {
           studentId, studentName, sem,
@@ -492,10 +488,9 @@ export function LMSProvider({ children }) {
       return next;
     });
 
-    const { setDoc: sd } = await import("firebase/firestore");
     const results = await Promise.allSettled(
       Object.entries(grouped).map(([studentId, g]) =>
-        sd(
+        setDoc(
           doc(db, "marks", studentId),
           {
             studentId,
