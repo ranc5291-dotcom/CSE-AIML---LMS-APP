@@ -1,21 +1,31 @@
 // ============================================================
 // CSEAIML LMS — API Service
 // All calls go to FastAPI backend at localhost:8000
+// (sendNotification is the exception — it now writes directly
+// to Firestore, which triggers a Cloud Function. See below.)
 // ============================================================
+
+import { db } from "./firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+// CHANGED: previously POSTed to `${BASE_URL}/notifications/send` (Render,
+// FastAPI, firebase-admin). Now writes a document to Firestore's
+// `notificationEvents` collection. A Cloud Function
+// (functions/index.js: sendNotificationOnEvent) triggers on that write
+// and sends the FCM push immediately — no dependency on Render being
+// awake. Signature and every call site are UNCHANGED.
 export async function sendNotification({ title, body, url = "/", role = null, userIds = null, year = null, semester = null }) {
   try {
-    const res = await fetch(`${BASE_URL}/notifications/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, body, url, role, userIds, year, semester }),
+    await addDoc(collection(db, "notificationEvents"), {
+      title, body, url, role, userIds, year, semester,
+      status: "pending",
+      createdAt: serverTimestamp(),
     });
-    if (!res.ok) console.warn("Notification send failed:", await res.text());
-    return res.ok;
+    return true;
   } catch (err) {
-    console.warn("Notification send error:", err.message);
+    console.warn("Notification event write error:", err.message);
     return false;
   }
 }

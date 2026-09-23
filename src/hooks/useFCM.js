@@ -33,7 +33,13 @@ export function useFCM() {
 
     setupFCMToken(user).then((result) => {
       if (!result.success) {
-        console.warn("FCM setup:", result.error);
+        if (result.error?.startsWith("Notification permission")) {
+          // Expected on devices/browsers where the user hasn't granted
+          // (or has explicitly blocked) notifications — not an error.
+          console.info("FCM setup skipped:", result.error);
+        } else {
+          console.warn("FCM setup:", result.error);
+        }
       }
     });
 
