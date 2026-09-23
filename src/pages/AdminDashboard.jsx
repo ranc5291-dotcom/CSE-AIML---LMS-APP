@@ -1093,11 +1093,11 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
                 <h3 className="text-[var(--color-text-primary)] font-semibold">📢 Post Announcement</h3>
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <input value={annTitle} onChange={(e) => setAnnTitle(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && annTitle.trim() && (addAnnouncement({ title: annTitle, tag: annTag, postedBy: user?.name }), setAnnTitle(""))}
                     placeholder="Announcement text..."
-                    className="flex-1 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm" />
+                    className="flex-1 min-w-full sm:min-w-48 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm" />
                   <select value={annTag} onChange={(e) => setAnnTag(e.target.value)}
                     className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer">
                     {TAG_OPTIONS.map((t) => <option key={t}>{t}</option>)}
