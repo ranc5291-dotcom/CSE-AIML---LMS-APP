@@ -33,7 +33,7 @@ groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 QUESTION_LIMIT = 3
 WINDOW_HOURS = 4.5
-MODEL = "llama-3.1-8b-instant"
+MODEL = "openai/gpt-oss-20b"
 
 # Make sure the shared Firebase Admin app is initialized before any
 # verify_id_token() call below. get_firebase_app() is idempotent (it
