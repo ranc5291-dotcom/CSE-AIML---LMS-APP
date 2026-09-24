@@ -12,3 +12,5 @@ python-multipart
 email-validator
 requests
 httpx
+groq
+supabase

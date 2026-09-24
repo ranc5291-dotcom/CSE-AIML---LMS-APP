@@ -52,7 +52,14 @@ async function request(method, path, body = null, isFormData = false) {
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.detail || "Something went wrong");
+    // detail can be a string, or an object like { message, reset_at } (AI support 429)
+    const d = data.detail;
+    const err = new Error(
+      typeof d === "string" ? d : (d && d.message) || "Something went wrong"
+    );
+    err.status = res.status;
+    if (d && typeof d === "object" && d.reset_at) err.resetAt = d.reset_at;
+    throw err;
   }
   return data;
 }
@@ -166,4 +173,11 @@ export const companiesAPI = {
   add: (data) => post("/companies/", data),
   getAll: () => get("/companies/"),
   delete: (id) => del(`/companies/${id}`),
+};
+
+
+// ── AI SUPPORT ────────────────────────────────────────────────
+export const aiSupportAPI = {
+  ask: (question) => post("/api/ai-support/ask", { question }),
+  status: () => get("/api/ai-support/status"),
 };

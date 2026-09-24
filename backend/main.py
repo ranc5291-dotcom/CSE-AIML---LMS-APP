@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from routers.ai_support import router as ai_support_router
 from fastapi.middleware.cors import CORSMiddleware
 from routers.notifications import router as notifications_router
 from routers.auth import router as auth_router
@@ -46,6 +47,7 @@ app.include_router(announcements_router)
 app.include_router(events_router)
 app.include_router(companies_router)
 app.include_router(account_router)
+app.include_router(ai_support_router)
 
 
 # ── HEALTH CHECK ──────────────────────────────────────────────

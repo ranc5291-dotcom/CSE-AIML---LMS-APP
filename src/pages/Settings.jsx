@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
+import AIAssistantWidget from "../components/AIAssistantWidget";
 
 const APP_VERSION = "1.0.0";
 const BUILD_DATE  = "August 2026";
@@ -279,6 +280,8 @@ function HelpSection() {
 
   return (
     <div className="space-y-5">
+      <AIAssistantWidget />
+
       <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-2">
         <h3 className="text-[var(--color-text-primary)] font-semibold mb-1">ℹ️ App Info</h3>
         <div className="flex justify-between text-sm py-2 border-b border-[var(--color-border)]">
