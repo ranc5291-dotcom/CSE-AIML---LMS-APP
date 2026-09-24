@@ -7,6 +7,7 @@
 
 import { db } from "./firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getIdToken } from "./firebase";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -31,12 +32,21 @@ export async function sendNotification({ title, body, url = "/", role = null, us
 }
 
 // ── Helper ────────────────────────────────────────────────────
-function getToken() {
-  return localStorage.getItem("lms_token");
+// CHANGED: the backend now verifies real Firebase ID tokens (see
+// ai_support.py's get_current_user_id, same pattern as
+// deleteFirebaseAuthAccount in AuthContext.jsx). There is no
+// "lms_token" in localStorage — the token must come fresh from
+// Firebase on every request, since ID tokens expire hourly.
+async function getToken() {
+  try {
+    return await getIdToken();
+  } catch {
+    return null; // no signed-in Firebase user
+  }
 }
 
 async function request(method, path, body = null, isFormData = false) {
-  const token = getToken();
+  const token = await getToken();
 
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;

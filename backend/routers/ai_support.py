@@ -5,13 +5,14 @@ AI support assistant endpoint for the Help & Support tab.
 Enforces a 3-questions-per-4.5-hour limit per user via a Supabase RPC,
 then answers using Groq, grounded strictly in lms_knowledge.py.
 
-Auth: decodes your existing custom JWT (same SECRET_KEY/ALGORITHM as
-auth.py) to get the user id from the "sub" claim -- there's no separate
-Supabase Auth user here.
+Auth: verifies the Firebase ID token sent by the frontend (getIdToken()),
+the same way /account/delete-account does. Uses the firebase_admin app
+already initialized in firebase_admin_init.py -- does NOT initialize a
+second Firebase Admin app.
 
 Install: pip install groq supabase
 Env vars needed: GROQ_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-(SECRET_KEY / ALGORITHM already exist in your .env for auth.py)
+(FIREBASE_SERVICE_ACCOUNT_PATH already exists in your .env)
 """
 
 import os
@@ -19,36 +20,40 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
-from jose import jwt, JWTError
+from firebase_admin import auth as firebase_auth
 from groq import Groq
 
 from lms_knowledge import LMS_KNOWLEDGE_BASE, SYSTEM_PROMPT_TEMPLATE
 from supabase_client import supabase
+from firebase_admin_init import get_firebase_app
 
 router = APIRouter(prefix="/api/ai-support", tags=["ai-support"])
 
 groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-
 QUESTION_LIMIT = 3
 WINDOW_HOURS = 4.5
 MODEL = "llama-3.1-8b-instant"
 
+# Make sure the shared Firebase Admin app is initialized before any
+# verify_id_token() call below. get_firebase_app() is idempotent (it
+# only initializes once, globally), so this is safe even if
+# notifications.py / account.py already called it.
+get_firebase_app()
+
 
 def get_current_user_id(authorization: str = Header(None)) -> str:
-    """Decodes the same JWT your other routes use (see auth.py's create_token)."""
+    """Verifies the Firebase ID token the frontend sends via getIdToken()."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header.")
 
     token = authorization.split(" ", 1)[1]
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
+        decoded = firebase_auth.verify_id_token(token)
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token.")
 
-    user_id = payload.get("sub")
+    user_id = decoded.get("uid")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload.")
     return user_id
