@@ -69,29 +69,39 @@ class AskResponse(BaseModel):
     reset_at: str
 
 
-@router.post("/ask", response_model=AskResponse)
-async def ask_ai_support(payload: AskRequest, user_id: str = Depends(get_current_user_id)):
-    result = supabase.rpc(
-        "check_and_increment_ai_usage",
-        {
-            "p_user_id": user_id,
-            "p_limit": QUESTION_LIMIT,
-            "p_window_hours": WINDOW_HOURS,
-        },
-    ).execute()
+def _check_usage_only(user_id: str):
+    """Read-only version of the usage check (mirrors /status). Does NOT
+    increment anything -- used to reject over-limit requests BEFORE we
+    spend a Groq call, so a failed Groq call never costs the user a
+    question."""
+    result = supabase.table("ai_support_usage").select("*").eq("user_id", user_id).execute()
+    if not result.data:
+        return  # no row yet -> definitely under the limit
 
     row = result.data[0]
-    if not row["allowed"]:
+    window = timedelta(hours=WINDOW_HOURS)
+    window_start = datetime.fromisoformat(row["window_start"].replace("Z", "+00:00"))
+
+    if datetime.now(timezone.utc) - window_start > window:
+        return  # window expired -> fresh set of questions
+
+    if row["question_count"] >= QUESTION_LIMIT:
         raise HTTPException(
             status_code=429,
             detail={
                 "message": "You've used all 3 questions for now. Try again later.",
-                "reset_at": row["reset_at"],
+                "reset_at": (window_start + window).isoformat(),
             },
         )
 
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(knowledge_base=LMS_KNOWLEDGE_BASE)
 
+@router.post("/ask", response_model=AskResponse)
+async def ask_ai_support(payload: AskRequest, user_id: str = Depends(get_current_user_id)):
+    # 1. Reject over-limit requests WITHOUT spending a question.
+    _check_usage_only(user_id)
+
+    # 2. Call Groq. If this fails, the user hasn't been charged anything.
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(knowledge_base=LMS_KNOWLEDGE_BASE)
     try:
         completion = groq_client.chat.completions.create(
             model=MODEL,
@@ -105,6 +115,17 @@ async def ask_ai_support(payload: AskRequest, user_id: str = Depends(get_current
         answer = completion.choices[0].message.content
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI service error: {str(e)}")
+
+    # 3. Only now, after a real answer came back, spend one of the 3 questions.
+    result = supabase.rpc(
+        "check_and_increment_ai_usage",
+        {
+            "p_user_id": user_id,
+            "p_limit": QUESTION_LIMIT,
+            "p_window_hours": WINDOW_HOURS,
+        },
+    ).execute()
+    row = result.data[0]
 
     return AskResponse(answer=answer, remaining=row["remaining"], reset_at=row["reset_at"])
 
