@@ -53,6 +53,9 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab]   = useState("Overview");
   const [annTitle, setAnnTitle]     = useState("");
   const [annTag, setAnnTag]         = useState("Notice");
+  // Announcement targeting — either specific semester(s), or the whole branch.
+  const [annSemesters, setAnnSemesters] = useState([]);
+  const [annBranchWide, setAnnBranchWide] = useState(false);
   const [searchStudent, setSearchStudent] = useState("");
   const [filterYear, setFilterYear]       = useState("All");
   const [filterSem, setFilterSem]         = useState("All");
@@ -290,6 +293,22 @@ export default function AdminDashboard() {
     setNoticeBranchWide((prev) => {
       const next = !prev;
       if (next) setNoticeSemesters([]);
+      return next;
+    });
+  };
+
+  // Announcement targeting — same mutually-exclusive pattern as Notice Board.
+  const toggleAnnSemester = (sem) => {
+    setAnnBranchWide(false);
+    setAnnSemesters((prev) =>
+      prev.includes(sem) ? prev.filter((s) => s !== sem) : [...prev, sem]
+    );
+  };
+
+  const toggleAnnBranchWide = () => {
+    setAnnBranchWide((prev) => {
+      const next = !prev;
+      if (next) setAnnSemesters([]);
       return next;
     });
   };
@@ -1095,20 +1114,68 @@ export default function AdminDashboard() {
                 <h3 className="text-[var(--color-text-primary)] font-semibold">📢 Post Announcement</h3>
                 <div className="flex gap-3 flex-wrap">
                   <input value={annTitle} onChange={(e) => setAnnTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && annTitle.trim() && (addAnnouncement({ title: annTitle, tag: annTag, postedBy: user?.name }), setAnnTitle(""))}
+                    onKeyDown={(e) => e.key === "Enter" && annTitle.trim() && (
+                      addAnnouncement({
+                        title: annTitle, tag: annTag, postedBy: user?.name,
+                        semesters: annBranchWide ? [] : annSemesters,
+                        isBranchWide: annBranchWide,
+                      }),
+                      setAnnTitle(""), setAnnSemesters([]), setAnnBranchWide(false)
+                    )}
                     placeholder="Announcement text..."
                     className="flex-1 min-w-full sm:min-w-48 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm" />
                   <select value={annTag} onChange={(e) => setAnnTag(e.target.value)}
                     className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer">
                     {TAG_OPTIONS.map((t) => <option key={t}>{t}</option>)}
                   </select>
-                  <button
-                    onClick={() => { if (annTitle.trim()) { addAnnouncement({ title: annTitle, tag: annTag, postedBy: user?.name }); setAnnTitle(""); } }}
-                    disabled={!annTitle.trim()}
-                    className="px-4 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer">
-                    Post
-                  </button>
                 </div>
+
+                {/* Announcement targeting — specific semester(s) or the whole branch */}
+                <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl p-3 space-y-2">
+                  <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider">Send To</p>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={annBranchWide}
+                      onChange={toggleAnnBranchWide}
+                      className="w-4 h-4 cursor-pointer accent-[var(--color-accent-solid)]"
+                    />
+                    <span className="text-[var(--color-text-primary)] text-sm font-medium">🏛️ Whole CSE(AIML) Branch (all semesters)</span>
+                  </label>
+                  <div className={`flex flex-wrap gap-2 ${annBranchWide ? "opacity-40 pointer-events-none" : ""}`}>
+                    {SEM_OPTIONS.map((sem) => (
+                      <button
+                        key={sem}
+                        type="button"
+                        onClick={() => toggleAnnSemester(sem)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-all
+                          ${annSemesters.includes(sem) ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
+                        {sem}
+                      </button>
+                    ))}
+                  </div>
+                  {!annBranchWide && annSemesters.length === 0 && (
+                    <p className="text-amber-400 text-xs">⚠ No semester selected — the announcement will still post, notifying all students.</p>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (annTitle.trim()) {
+                      addAnnouncement({
+                        title: annTitle, tag: annTag, postedBy: user?.name,
+                        semesters: annBranchWide ? [] : annSemesters,
+                        isBranchWide: annBranchWide,
+                      });
+                      setAnnTitle("");
+                      setAnnSemesters([]);
+                      setAnnBranchWide(false);
+                    }
+                  }}
+                  disabled={!annTitle.trim()}
+                  className="w-full px-4 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer">
+                  Post
+                </button>
               </div>
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
                 <h3 className="text-[var(--color-text-primary)] font-semibold">All Announcements ({announcements.length})</h3>
@@ -1118,6 +1185,11 @@ export default function AdminDashboard() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full">{a.tag}</span>
+                        {(a.isBranchWide || (a.semesters && a.semesters.length > 0)) && (
+                          <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full">
+                            🎯 {a.isBranchWide ? "Whole Branch" : a.semesters.join(", ")}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[var(--color-text-primary)] text-sm font-medium">{a.title}</p>
                       <p className="text-[var(--color-text-muted)] text-xs mt-1">{a.time} · Posted by {a.postedBy}</p>

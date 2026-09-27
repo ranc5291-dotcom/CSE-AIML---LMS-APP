@@ -396,16 +396,41 @@ export function LMSProvider({ children }) {
     sendNotification({ title, body, url, role: "student", year, semester });
   };
 
+  // TARGETING — same pattern as addNotice above. a.isBranchWide /
+  // a.semesters decide who gets notified:
+  //   - isBranchWide: true    → every student, any semester
+  //   - semesters: [sem, ...] → only students in those semester(s)
+  //   - neither set           → falls back to every student (NOT
+  //     faculty/admin/placement — previously this call had no role
+  //     filter at all, which meant every fcmTokens entry regardless
+  //     of role got notified for every announcement).
   const addAnnouncement = async (a) => {
+    const isBranchWide = !!a.isBranchWide;
+    const semesters = isBranchWide ? [] : (a.semesters || []);
+
     await addDoc(collection(db, "announcements"), {
       title: a.title, tag: a.tag, postedBy: a.postedBy,
+      semesters, isBranchWide,
       time: new Date().toLocaleTimeString(), createdAt: serverTimestamp(),
     });
-    sendNotification({
-      title: `Announcement: ${a.tag || "New"}`,
-      body: a.title,
-      url: "/announcements",
-    });
+
+    const title = `Announcement: ${a.tag || "New"}`;
+    const body  = a.title;
+
+    if (isBranchWide) {
+      sendNotification({ title, body, url: "/announcements", role: "student" });
+    } else if (semesters.length > 0) {
+      semesters.forEach((sem) => {
+        sendNotification({
+          title, body, url: "/announcements",
+          role: "student",
+          year: SEM_TO_YEAR[sem] || null,
+          semester: sem,
+        });
+      });
+    } else {
+      sendNotification({ title, body, url: "/announcements", role: "student" });
+    }
   };
   const removeAnnouncement = async (id) => {
     try { await deleteDoc(doc(db, "announcements", String(id))); } catch {}
