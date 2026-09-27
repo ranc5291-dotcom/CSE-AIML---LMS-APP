@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
+import { sendNotification } from "../utils/api";
 
 const TAG_COLORS = {
   Technical: "bg-blue-500/20 text-blue-400",
@@ -39,6 +40,15 @@ export default function Events() {
       return;
     }
     addEvent({ ...newEvent, organizer: user?.name });
+
+    // NEW: fire a push notification to students when an event is hosted
+    sendNotification({
+      title: `New Event: ${newEvent.title}`,
+      body: newEvent.desc || `Hosted by ${user?.name} on ${newEvent.date}`,
+      url: "/events",
+      role: "student",
+    });
+
     setNewEvent({ title: "", desc: "", date: "", time: "", venue: "", tag: "Technical", googleFormUrl: "" });
     setShowForm(false);
     setSuccess(`✅ "${newEvent.title}" has been hosted successfully! Students will see it now.`);
