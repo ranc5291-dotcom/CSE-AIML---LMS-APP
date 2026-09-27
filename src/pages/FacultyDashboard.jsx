@@ -1023,11 +1023,26 @@ export default function FacultyDashboard() {
                   </div>
                   <div>
                     <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">Type</label>
-                    <select value={noteType} onChange={(e) => setNoteType(e.target.value)}
+                    <select
+                      value={noteType}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // "Assignment" isn't a real note type — it belongs to
+                        // the separate Assignments flow (which has its own
+                        // due date and shows up in the student's dedicated
+                        // Assignments section). Selecting it here just sends
+                        // the faculty to the right place instead of creating
+                        // a stranded, mislabeled "note".
+                        if (val === "Assignment") {
+                          setActiveTab("Assignments");
+                          return;
+                        }
+                        setNoteType(val);
+                      }}
                       className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] text-sm cursor-pointer">
                       <option value="Notes">📝 Notes</option>
                       <option value="PYQ">📋 Previous Year Questions</option>
-                      <option value="Assignment">📌 Assignment</option>
+                      <option value="Assignment">📌 Assignment (go to Assignments tab)</option>
                       <option value="Reference">📚 Reference Material</option>
                     </select>
                   </div>
@@ -1121,6 +1136,15 @@ export default function FacultyDashboard() {
                       </div>
                       <button onClick={() => removeAssignment(a.id)} className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer text-base ml-4">🗑️</button>
                     </div>
+                    {a.fileUrl && (
+                      <div className="flex border-t border-[var(--color-border)]">
+                        <button onClick={() => setPdfViewer({ fileUrl: a.fileUrl, fileName: a.file || a.title })}
+                          className="flex-1 py-2 text-xs font-medium text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)] cursor-pointer">👁 Preview</button>
+                        <div className="w-px bg-[var(--color-border)]" />
+                        <button onClick={() => downloadFile(a.fileUrl, a.file || a.title)}
+                          className="flex-1 py-2 text-xs font-medium text-green-400 hover:bg-green-500/10 cursor-pointer text-center">⬇️ Download</button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

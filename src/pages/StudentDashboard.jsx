@@ -541,15 +541,23 @@ export default function StudentDashboard() {
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 3);
 
-  const allNotices = [
-    ...(notices || []),
-    ...(announcements || []),
-  ]
+  // Notice Board — notices only. Announcements now render in their own
+  // separate card below, instead of being merged into this list.
+  const allNotices = (notices || [])
     .filter((n) => {
       const targetType = n.targetType || "global";
       if (targetType === "global") return true;
       return n.year === currentYear && n.semester === currentSem;
     })
+    .sort((a, b) => {
+      const ta = a.createdAt?.seconds || 0;
+      const tb = b.createdAt?.seconds || 0;
+      return tb - ta;
+    });
+
+  // Announcements — separate card, same sorting as Notice Board.
+  const allAnnouncements = (announcements || [])
+    .slice()
     .sort((a, b) => {
       const ta = a.createdAt?.seconds || 0;
       const tb = b.createdAt?.seconds || 0;
@@ -666,6 +674,31 @@ export default function StudentDashboard() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">Announcements</h3>
+                  <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full ml-auto">
+                    {allAnnouncements.length} announcements
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {allAnnouncements.length === 0 && (
+                    <p className="text-[var(--color-text-muted)] text-sm">No announcements yet.</p>
+                  )}
+                  {allAnnouncements.map((a) => (
+                    <div key={a.id} className="p-3 bg-[var(--color-bg-surface-alt)] rounded-xl border-l-4 border-blue-500">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-[var(--color-text-primary)] text-xs font-medium leading-snug">{a.title}</p>
+                        <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 bg-blue-500/20 text-blue-400">{a.tag}</span>
+                      </div>
+                      <p className="text-[var(--color-text-muted)] text-xs mt-1">
+                        {a.time} - {a.postedBy}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
