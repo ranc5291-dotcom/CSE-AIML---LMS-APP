@@ -40,7 +40,7 @@ const SEM_OPTIONS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 
 const SEM_TO_YEAR_MAP = Object.fromEntries(SEM_SEQUENCE.map(({ year, sem }) => [sem, year]));
 
 export default function AdminDashboard() {
-  const { user, updateStudentStatus, promoteStudent, detainStudent, removeStudent, getLoginLog, enrolledVersion, manageUserRoles } = useAuth();
+  const { user, updateStudentStatus, promoteStudent, detainStudent, removeStudent, getLoginLog, enrolledVersion, manageUserRoles, updateUserProfile } = useAuth();
   const {
     complaints, updateComplaintStatus, removeComplaint,
     announcements, addAnnouncement, removeAnnouncement,
@@ -65,6 +65,32 @@ export default function AdminDashboard() {
   const [pendingRoles, setPendingRoles] = useState({});
   const [roleSearch, setRoleSearch] = useState("");
   const [savingRoles, setSavingRoles] = useState(null);
+
+  // Change Semester — admin corrects a student who registered with the
+  // wrong year/semester. Sets any semester directly (forward or backward),
+  // unlike Promote which only moves one step forward.
+  const [changeSemStudent, setChangeSemStudent] = useState(null);
+  const [changeSemIdx, setChangeSemIdx]         = useState("");
+  const [changeSemSaving, setChangeSemSaving]   = useState(false);
+
+  const openChangeSem = (s) => {
+    const idx = SEM_SEQUENCE.findIndex((x) => x.year === s.year && x.sem === s.sem);
+    setChangeSemIdx(idx >= 0 ? String(idx) : "");
+    setChangeSemStudent(s);
+  };
+
+  const executeChangeSem = async () => {
+    if (!changeSemStudent || changeSemIdx === "") return;
+    const target = SEM_SEQUENCE[Number(changeSemIdx)];
+    setChangeSemSaving(true);
+    const result = await updateUserProfile(changeSemStudent.id, { year: target.year, sem: target.sem });
+    setChangeSemSaving(false);
+    if (result.success) {
+      setChangeSemStudent(null);
+    } else {
+      alert("Failed to change semester: " + result.error);
+    }
+  };
 
   // Sorting — Student Management
   const [sortBy, setSortBy]   = useState("name");
@@ -746,6 +772,10 @@ export default function AdminDashboard() {
                               ⬆️ Promote
                             </button>
                           )}
+                          <button onClick={() => openChangeSem(s)}
+                            className="px-3 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-lg text-xs font-medium cursor-pointer transition-all">
+                            ✏️ Change Sem
+                          </button>
                           {status === "active" && (
                             <button onClick={() => handleAction(s.id, "detain")}
                               className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg text-xs font-medium cursor-pointer transition-all">
@@ -1382,6 +1412,56 @@ export default function AdminDashboard() {
 
         </main>
       </div>
+
+      {/* Change Semester Modal */}
+      {changeSemStudent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[var(--color-text-primary)] font-bold text-lg mb-2">Change Semester</h3>
+            <p className="text-[var(--color-text-secondary)] text-sm mb-1">
+              Student: <span className="text-[var(--color-text-primary)] font-medium">{changeSemStudent.name}</span>
+            </p>
+            <p className="text-[var(--color-text-muted)] text-xs mb-4">
+              Current: {changeSemStudent.year || "—"} · {changeSemStudent.sem || "—"}
+            </p>
+
+            <label className="text-[var(--color-text-secondary)] text-xs block mb-1">Correct semester</label>
+            <select
+              value={changeSemIdx}
+              onChange={(e) => setChangeSemIdx(e.target.value)}
+              disabled={changeSemSaving}
+              className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm cursor-pointer mb-3 disabled:opacity-50">
+              {changeSemIdx === "" && <option value="">Select semester</option>}
+              {SEM_SEQUENCE.map((s, i) => (
+                <option key={s.sem} value={String(i)}>{s.year} · {s.sem}</option>
+              ))}
+            </select>
+
+            <p className="text-[var(--color-text-muted)] text-xs mb-6">
+              Only the year and semester change. Marks, attendance and other records are kept. The student sees the new
+              semester after logging in again.
+            </p>
+
+            <div className="flex gap-3">
+              <button onClick={() => setChangeSemStudent(null)} disabled={changeSemSaving}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                onClick={executeChangeSem}
+                disabled={
+                  changeSemSaving ||
+                  changeSemIdx === "" ||
+                  (SEM_SEQUENCE[Number(changeSemIdx)]?.year === changeSemStudent.year &&
+                   SEM_SEQUENCE[Number(changeSemIdx)]?.sem === changeSemStudent.sem)
+                }
+                className="flex-1 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold cursor-pointer">
+                {changeSemSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Bulk Promote Modal */}
       {confirmBulkPromote && (
