@@ -1,8 +1,7 @@
 // ============================================================
 // CSEAIML LMS — API Service
 // All calls go to FastAPI backend at localhost:8000
-// (sendNotification is the exception — it now writes directly
-// to Firestore, which triggers a Cloud Function. See below.)
+// (sendNotification is the exception — see below.)
 // ============================================================
 
 import { db } from "./firebase";
@@ -11,13 +10,51 @@ import { getIdToken } from "./firebase";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-// CHANGED: previously POSTed to `${BASE_URL}/notifications/send` (Render,
-// FastAPI, firebase-admin). Now writes a document to Firestore's
-// `notificationEvents` collection. A Cloud Function
-// (functions/index.js: sendNotificationOnEvent) triggers on that write
-// and sends the FCM push immediately — no dependency on Render being
-// awake. Signature and every call site are UNCHANGED.
+// ── PUSH SENDING MODE ─────────────────────────────────────────
+// true  → TEMPORARY: send through the Render backend
+//         (POST /notifications/send), with retries for cold starts.
+// false → send via Firestore `notificationEvents`, which triggers the
+//         Cloud Function (needs the Blaze plan).
+// Only ONE mode runs at a time, so students never get duplicates.
+// Once Blaze is active and the function is deployed, set this to false.
+const USE_RENDER_PUSH = true;
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function sendViaRender(payload) {
+  // Render's free tier sleeps when idle and can take 50s+ to wake, so
+  // allow a long timeout and retry network errors / 5xx responses.
+  const delays = [0, 3000, 8000];
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i]) await wait(delays[i]);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90000);
+    try {
+      const res = await fetch(`${BASE_URL}/notifications/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok) return true;
+      // 4xx (e.g. 404 "no registered devices") won't succeed on retry.
+      if (res.status >= 400 && res.status < 500) {
+        console.warn("Notification not sent:", res.status);
+        return false;
+      }
+    } catch (err) {
+      clearTimeout(timer);
+      console.warn(`Notification attempt ${i + 1} failed:`, err.message);
+    }
+  }
+  return false;
+}
+
 export async function sendNotification({ title, body, url = "/", role = null, userIds = null, year = null, semester = null }) {
+  if (USE_RENDER_PUSH) {
+    return sendViaRender({ title, body, url, role, userIds, year, semester });
+  }
   try {
     await addDoc(collection(db, "notificationEvents"), {
       title, body, url, role, userIds, year, semester,
