@@ -204,7 +204,7 @@ export default function Events() {
     };
   };
 
-  const handleSaveEvent = () => {
+   const handleSaveEvent = () => {
     if (!newEvent.title.trim() || !newEvent.date) {
       alert("Title and date are required.");
       return;
@@ -219,6 +219,13 @@ export default function Events() {
 
     if (editingId) {
       updateEvent(editingId, payload);
+      // Notify students that the event details changed
+      sendNotification({
+        title: `Event Updated: ${payload.title}`,
+        body: `Details for this event have been updated. Tap to view the latest info.`,
+        url: "/events",
+        role: "student",
+      });
       setSuccess(`✅ "${payload.title}" has been updated.`);
     } else {
       addEvent({ ...payload, organizer: user?.name }, user?.name);
@@ -240,10 +247,6 @@ export default function Events() {
     if (!isStudent) return;
     if (getEventStatus(event).closed) return;
     if ((event.joined || []).includes(user?.id)) return;
-
-    if (event.googleFormUrl) {
-      window.open(normalizeUrl(event.googleFormUrl), "_blank", "noopener,noreferrer");
-    }
     setJoinModalEvent(event);
     setJoinNote("");
     setJoinError("");
