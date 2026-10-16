@@ -277,6 +277,7 @@ export default function Events() {
                     className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer">
                     <option>Technical</option>
                     <option>Non-Technical</option>
+                    <option>Both(Tech & Non-Tech)</option>
                   </select>
                 </div>
                 <div>
