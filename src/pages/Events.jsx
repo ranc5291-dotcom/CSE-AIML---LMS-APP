@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
@@ -13,9 +13,42 @@ const TAG_COLORS = {
   Workshop:  "bg-amber-500/20 text-amber-400",
 };
 
+const HIGHLIGHT_PRESETS = [
+  "🏆 Prizes", "📜 Certificates", "🍕 Free Food", "🎁 Goodies / Swag",
+  "🎤 Guest Speaker", "🛠️ Hands-on", "👥 Team Event", "🤝 Networking",
+  "💼 Placement Opportunity", "🎥 Live Demo",
+];
+
+const EMPTY_EVENT = {
+  title: "", desc: "", date: "", time: "",
+  venue: "", tag: "Technical", googleFormUrl: "",
+  eventType: "Technical",          // Technical / Non-Technical
+  organizerPhone: "", organizerEmail: "",
+  extraDates: [],                  // additional dates besides the main one
+  poster: "",                      // compressed image (data URL)
+  highlights: [],                  // exciting features of the event
+  registrationOpen: true,          // organizer-controlled Open / Closed
+};
+
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const getEventDates = (e) =>
+  (e.dates && e.dates.length ? e.dates : [e.date]).filter(Boolean);
+
+// Closed if the organizer closed it, or if the last date has passed.
+const getEventStatus = (e) => {
+  if (e.registrationOpen === false) return { closed: true, ended: false };
+  const last = [...getEventDates(e)].sort().pop();
+  if (last && last < todayStr()) return { closed: true, ended: true };
+  return { closed: false, ended: false };
+};
+
 export default function Events() {
   const { user } = useAuth();
-  const { events, addEvent, removeEvent, joinEvent } = useLMS();
+  const { events, addEvent, removeEvent, updateEvent, joinEvent } = useLMS();
 
   const isFaculty = user?.role === "faculty" || user?.role === "admin";
   const isStudent = user?.role === "student";
@@ -23,10 +56,9 @@ export default function Events() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showForm, setShowForm]     = useState(false);
   const [success, setSuccess]       = useState("");
-  const [newEvent, setNewEvent]     = useState({
-    title: "", desc: "", date: "", time: "",
-    venue: "", tag: "Technical", googleFormUrl: "",
-  });
+  const [newEvent, setNewEvent]     = useState(EMPTY_EVENT);
+  const [customHighlight, setCustomHighlight] = useState("");
+  const posterInputRef = useRef(null);
 
   // ── Join modal (captures optional note before registering) ──
   const [joinModalEvent, setJoinModalEvent] = useState(null);
@@ -34,14 +66,67 @@ export default function Events() {
   const [joinError, setJoinError] = useState("");
   const [joining, setJoining] = useState(false);
 
+  const addExtraDate = () =>
+    setNewEvent((p) => ({ ...p, extraDates: [...p.extraDates, ""] }));
+  const updateExtraDate = (i, v) =>
+    setNewEvent((p) => ({ ...p, extraDates: p.extraDates.map((d, idx) => (idx === i ? v : d)) }));
+  const removeExtraDate = (i) =>
+    setNewEvent((p) => ({ ...p, extraDates: p.extraDates.filter((_, idx) => idx !== i) }));
+
+  const toggleHighlight = (h) =>
+    setNewEvent((p) => ({
+      ...p,
+      highlights: p.highlights.includes(h) ? p.highlights.filter((x) => x !== h) : [...p.highlights, h],
+    }));
+
+  const addCustomHighlight = () => {
+    const v = customHighlight.trim();
+    if (!v) return;
+    setNewEvent((p) => (p.highlights.includes(v) ? p : { ...p, highlights: [...p.highlights, v] }));
+    setCustomHighlight("");
+  };
+
+  const handlePosterChange = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 800 / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Keep the poster small enough for a Firestore document.
+        let q = 0.75;
+        let url = canvas.toDataURL("image/jpeg", q);
+        while (url.length > 600000 && q > 0.3) {
+          q -= 0.15;
+          url = canvas.toDataURL("image/jpeg", q);
+        }
+        setNewEvent((p) => ({ ...p, poster: url }));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddEvent = () => {
     if (!newEvent.title.trim() || !newEvent.date) {
       alert("Title and date are required.");
       return;
     }
-    addEvent({ ...newEvent, organizer: user?.name });
+    if (newEvent.organizerEmail && !/^\S+@\S+\.\S+$/.test(newEvent.organizerEmail)) {
+      alert("Please enter a valid organizer email.");
+      return;
+    }
+    const { extraDates, ...rest } = newEvent;
+    const dates = Array.from(new Set([newEvent.date, ...extraDates.filter(Boolean)])).sort();
 
-    // NEW: fire a push notification to students when an event is hosted
+    addEvent({ ...rest, dates, organizer: user?.name }, user?.name);
+
+    // fire a push notification to students when an event is hosted
     sendNotification({
       title: `New Event: ${newEvent.title}`,
       body: newEvent.desc || `Hosted by ${user?.name} on ${newEvent.date}`,
@@ -49,7 +134,9 @@ export default function Events() {
       role: "student",
     });
 
-    setNewEvent({ title: "", desc: "", date: "", time: "", venue: "", tag: "Technical", googleFormUrl: "" });
+    setNewEvent(EMPTY_EVENT);
+    setCustomHighlight("");
+    if (posterInputRef.current) posterInputRef.current.value = "";
     setShowForm(false);
     setSuccess(`✅ "${newEvent.title}" has been hosted successfully! Students will see it now.`);
     setTimeout(() => setSuccess(""), 4000);
@@ -59,6 +146,7 @@ export default function Events() {
   // they must contact the faculty member who hosted the event.
   const handleJoin = (event) => {
     if (!isStudent) return;
+    if (getEventStatus(event).closed) return;
     const alreadyJoined = event.joined.includes(user?.id);
     if (alreadyJoined) return;
 
@@ -74,8 +162,6 @@ export default function Events() {
     if (!joinModalEvent) return;
     setJoining(true);
     setJoinError("");
-    // Pass the full user object (name/usn/sem) + note so the registration
-    // row can capture who joined and why.
     const result = await joinEvent(joinModalEvent.id, user, joinNote);
     setJoining(false);
     if (!result.ok) {
@@ -159,6 +245,122 @@ export default function Events() {
                 </div>
               </div>
 
+              {/* Additional dates */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[var(--color-text-secondary)] text-xs">
+                    Additional dates <span className="text-[var(--color-text-muted)]">(if the event runs on multiple days)</span>
+                  </label>
+                  <button type="button" onClick={addExtraDate}
+                    className="text-[var(--color-accent-soft-text)] text-xs font-medium hover:opacity-80 cursor-pointer">
+                    + Add another date
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {newEvent.extraDates.map((d, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <input type="date" value={d} onChange={(e) => updateExtraDate(i, e.target.value)}
+                        className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)]" />
+                      <button type="button" onClick={() => removeExtraDate(i)}
+                        className="text-[var(--color-text-muted)] hover:text-red-400 cursor-pointer text-sm">✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Event type + registration status + organizer contact */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Event Type</label>
+                  <select value={newEvent.eventType}
+                    onChange={(e) => setNewEvent({ ...newEvent, eventType: e.target.value })}
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer">
+                    <option>Technical</option>
+                    <option>Non-Technical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">Registration</label>
+                  <select value={newEvent.registrationOpen ? "open" : "closed"}
+                    onChange={(e) => setNewEvent({ ...newEvent, registrationOpen: e.target.value === "open" })}
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] cursor-pointer">
+                    <option value="open">🟢 Open</option>
+                    <option value="closed">🔴 Closed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">
+                    Organizer Phone <span className="text-[var(--color-text-muted)]">(optional)</span>
+                  </label>
+                  <input type="tel" value={newEvent.organizerPhone}
+                    onChange={(e) => setNewEvent({ ...newEvent, organizerPhone: e.target.value })}
+                    placeholder="e.g. 9876543210"
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
+                </div>
+                <div>
+                  <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">
+                    Organizer Email <span className="text-[var(--color-text-muted)]">(optional)</span>
+                  </label>
+                  <input type="email" value={newEvent.organizerEmail}
+                    onChange={(e) => setNewEvent({ ...newEvent, organizerEmail: e.target.value })}
+                    placeholder="e.g. name@college.edu"
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
+                </div>
+              </div>
+
+              {/* Exciting features / highlights */}
+              <div>
+                <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">
+                  What's exciting about this event? <span className="text-[var(--color-text-muted)]">(pick any, or add your own)</span>
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {[...HIGHLIGHT_PRESETS, ...newEvent.highlights.filter((h) => !HIGHLIGHT_PRESETS.includes(h))].map((h) => (
+                    <button key={h} type="button" onClick={() => toggleHighlight(h)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-all
+                        ${newEvent.highlights.includes(h)
+                          ? "bg-[var(--color-accent-solid)] text-white"
+                          : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
+                      {h}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input value={customHighlight}
+                    onChange={(e) => setCustomHighlight(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomHighlight(); } }}
+                    placeholder="Add your own, e.g. 🎮 Gaming zone"
+                    className="flex-1 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
+                  <button type="button" onClick={addCustomHighlight}
+                    className="px-4 py-2 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-xs font-medium cursor-pointer">
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Poster */}
+              <div>
+                <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">
+                  Event Poster <span className="text-[var(--color-text-muted)]">(optional)</span>
+                </label>
+                <div onClick={() => posterInputRef.current?.click()}
+                  className={`w-full border border-dashed rounded-xl p-3 flex items-center gap-3 cursor-pointer
+                    ${newEvent.poster ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]" : "border-[var(--color-border)]"}`}>
+                  {newEvent.poster
+                    ? <img src={newEvent.poster} alt="Poster preview" className="h-16 w-12 object-cover rounded-lg" />
+                    : <span className="text-xl">🖼️</span>}
+                  <p className="text-[var(--color-text-secondary)] text-xs flex-1">
+                    {newEvent.poster ? "Poster added — click to change" : "Click to upload a poster image"}
+                  </p>
+                  {newEvent.poster && (
+                    <button type="button"
+                      onClick={(e) => { e.stopPropagation(); setNewEvent({ ...newEvent, poster: "" }); if (posterInputRef.current) posterInputRef.current.value = ""; }}
+                      className="text-[var(--color-text-muted)] hover:text-red-400 text-xs cursor-pointer">✕</button>
+                  )}
+                  <input ref={posterInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => handlePosterChange(e.target.files[0])} />
+                </div>
+              </div>
+
               <div>
                 <label className="text-[var(--color-text-secondary)] text-xs mb-1 block">
                   Google Form URL <span className="text-[var(--color-text-muted)]">(students will be redirected here when they click Join)</span>
@@ -185,14 +387,33 @@ export default function Events() {
             )}
             {events.map((e) => {
               const joined = e.joined.includes(user?.id);
+              const status = getEventStatus(e);
+              const dates  = getEventDates(e);
               return (
                 <div key={e.id} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 flex flex-col gap-3">
+                  {e.poster && (
+                    <img src={e.poster} alt={`${e.title} poster`} className="w-full max-h-64 object-cover rounded-xl" />
+                  )}
+
                   <div className="flex items-start justify-between">
-                    <span className={`text-xs px-2 py-1 rounded-lg font-medium ${TAG_COLORS[e.tag] || "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
-                      {e.tag}
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs px-2 py-1 rounded-lg font-medium ${TAG_COLORS[e.tag] || "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
+                        {e.tag}
+                      </span>
+                      {e.eventType && (
+                        <span className="text-xs px-2 py-1 rounded-lg font-medium bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]">
+                          {e.eventType}
+                        </span>
+                      )}
+                      <span className={`text-xs px-2 py-1 rounded-lg font-medium
+                        ${status.closed ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
+                        {status.closed ? (status.ended ? "🔴 Ended" : "🔴 Closed") : "🟢 Open"}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[var(--color-text-muted)] text-xs">{e.date}</span>
+                      <span className="text-[var(--color-text-muted)] text-xs">
+                        {dates.length > 1 ? dates.join(" • ") : e.date}
+                      </span>
                       {isFaculty && (
                         <button onClick={() => removeEvent(e.id)}
                           className="text-[var(--color-text-muted)] hover:text-red-400 transition-colors cursor-pointer text-sm">🗑️</button>
@@ -205,35 +426,65 @@ export default function Events() {
                     <p className="text-[var(--color-text-secondary)] text-xs leading-relaxed">{e.desc}</p>
                   </div>
 
+                  {e.highlights && e.highlights.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {e.highlights.map((h) => (
+                        <span key={h} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] font-medium">
+                          {h}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-muted)]">
                     {e.time   && <span>🕐 {e.time}</span>}
                     {e.venue  && <span>📍 {e.venue}</span>}
                     <span>👤 {e.organizer}</span>
+                    {e.organizerPhone && <span>📱 {e.organizerPhone}</span>}
+                    {e.organizerEmail && <span>📧 {e.organizerEmail}</span>}
                   </div>
 
-                  {e.googleFormUrl && (
+                  {e.googleFormUrl && !status.closed && (
                     <div className="bg-[var(--color-accent-soft-bg)] border border-[var(--color-accent-solid)]/20 rounded-xl px-3 py-2 text-xs text-[var(--color-accent-soft-text)]">
                       📋 Registration form available — click Join to open
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-1 gap-3">
+                  <div className="flex items-center justify-between pt-1 gap-3 flex-wrap">
                     <span className="text-[var(--color-text-muted)] text-xs flex-shrink-0">👥 {e.joined.length} joined</span>
 
-                    {/* Only students see a join control. Faculty/admin/placement
-                        never see a Join button at all. */}
-                    {isStudent && (
-                      joined ? (
-                        <span className="px-4 py-2 rounded-xl text-xs font-semibold bg-green-600/20 border border-green-500/30 text-green-400 text-right">
-                          ✅ You have joined — contact {e.organizer} to cancel
-                        </span>
-                      ) : (
-                        <button onClick={() => handleJoin(e)}
-                          className="px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer bg-[var(--color-accent-solid)] hover:opacity-90 text-white flex-shrink-0">
-                          {e.googleFormUrl ? "📋 Join & Register →" : "Join Event →"}
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {/* Faculty/admin: open/close registration */}
+                      {isFaculty && !status.ended && (
+                        <button
+                          onClick={() => updateEvent(e.id, { registrationOpen: e.registrationOpen === false })}
+                          className={`px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all
+                            ${e.registrationOpen === false
+                              ? "bg-green-600/20 text-green-400 hover:bg-green-600/30"
+                              : "bg-red-600/20 text-red-400 hover:bg-red-600/30"}`}>
+                          {e.registrationOpen === false ? "🟢 Reopen Registration" : "🔴 Close Registration"}
                         </button>
-                      )
-                    )}
+                      )}
+
+                      {/* Only students see a join control. Faculty/admin/placement
+                          never see a Join button at all. */}
+                      {isStudent && (
+                        joined ? (
+                          <span className="px-4 py-2 rounded-xl text-xs font-semibold bg-green-600/20 border border-green-500/30 text-green-400 text-right">
+                            ✅ You have joined — contact {e.organizer} to cancel
+                          </span>
+                        ) : status.closed ? (
+                          <span className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-500/10 border border-red-500/30 text-red-400">
+                            🔒 {status.ended ? "Event ended" : "Registration closed"}
+                          </span>
+                        ) : (
+                          <button onClick={() => handleJoin(e)}
+                            className="px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer bg-[var(--color-accent-solid)] hover:opacity-90 text-white flex-shrink-0">
+                            {e.googleFormUrl ? "📋 Join & Register →" : "Join Event →"}
+                          </button>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               );

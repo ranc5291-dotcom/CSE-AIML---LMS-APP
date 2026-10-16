@@ -642,12 +642,26 @@ export function LMSProvider({ children }) {
     setAssignments((p) => p.filter((a) => a.id !== id));
   };
 
+  // Stores every field passed in `event` (dates, eventType, organizerPhone,
+  // organizerEmail, poster, highlights, registrationOpen, ...).
+  // `organizer` falls back to event.organizer so it is never overwritten with "".
   const addEvent = async (event, organizer = "") => {
-    await addDoc(collection(db, "events"), { ...event, organizer, joined: [], createdAt: serverTimestamp() });
+    await addDoc(collection(db, "events"), {
+      ...event,
+      organizer: organizer || event.organizer || "",
+      joined: [],
+      createdAt: serverTimestamp(),
+    });
   };
   const removeEvent = async (id) => {
     try { await deleteDoc(doc(db, "events", String(id))); } catch {}
     setEvents((p) => p.filter((e) => e.id !== id));
+  };
+  // Used to open/close registration (and any other later edits to an event).
+  const updateEvent = async (id, updates) => {
+    setEvents((p) => p.map((e) => (e.id === id ? { ...e, ...updates } : e)));
+    try { await updateDoc(doc(db, "events", String(id)), updates); }
+    catch (e) { console.warn("updateEvent:", e.message); }
   };
 
   // ── JOIN EVENT ──
@@ -669,6 +683,11 @@ export function LMSProvider({ children }) {
     }
 
     const event = events.find((e) => e.id === eventId);
+
+    if (event && event.registrationOpen === false) {
+      return { ok: false, error: "Registration for this event is closed." };
+    }
+
     const alreadyJoined = event ? (event.joined || []).includes(user.id) : false;
     if (alreadyJoined) {
       return { ok: false, error: "You have already joined this event." };
@@ -807,7 +826,7 @@ export function LMSProvider({ children }) {
       marks, updateMark, updateMarksBulk,
       markSheetUploads, addMarkSheetUpload, removeMarkSheetUpload,
       timetables, addTimetable, removeTimetable,
-      events, addEvent, removeEvent, joinEvent,
+      events, addEvent, removeEvent, updateEvent, joinEvent,
       notices, addNotice, removeNotice,
       announcements, addAnnouncement, removeAnnouncement,
       notifyAcademicUpdate,
