@@ -853,3 +853,35 @@ export async function getStudentAttendanceFull(studentId, year, semLabel) {
   });
   return result;
 }
+// Admin view — all assessments + all marks for one year/sem (read-only use).
+// Pages through results because Supabase returns max 1000 rows per request.
+export async function getMarksForYearSem(year, semLabel) {
+  const yearN = yearNumber(year);
+  const semN = semNumber(semLabel);
+  if (!yearN || !semN) return { assessments: [], marks: [] };
+
+  const { data: assessments, error: aErr } = await supabase
+    .from("subject_assessments")
+    .select("*, subjects!inner(*)")
+    .eq("academic_year", yearN)
+    .eq("semester", semN)
+    .eq("subjects.is_active", true)
+    .order("assessment_number", { ascending: true });
+  if (aErr) { console.warn("getMarksForYearSem (assessments):", aErr.message); return { assessments: [], marks: [] }; }
+  if (!assessments || assessments.length === 0) return { assessments: [], marks: [] };
+
+  const ids = assessments.map((a) => a.id);
+  const marks = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("marks")
+      .select("*")
+      .in("assessment_id", ids)
+      .range(from, from + PAGE - 1);
+    if (error) { console.warn("getMarksForYearSem (marks):", error.message); break; }
+    marks.push(...(data || []));
+    if (!data || data.length < PAGE) break;
+  }
+  return { assessments, marks };
+}

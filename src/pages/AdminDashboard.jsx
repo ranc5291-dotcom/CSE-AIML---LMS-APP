@@ -1,10 +1,15 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth, getAllStudents, getAllFaculty, getAllPlacement, getAllAdmins } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
-import { getAllUserRoles, getEventRegistrationSummary, getAllEventRegistrations, deleteEventRegistration } from "../utils/supabase";
-const TABS = ["Overview", "Student Management", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Events", "Announcements", "Notice Board", "Gallery"];
+import {
+  getAllUserRoles, getEventRegistrationSummary, getAllEventRegistrations, deleteEventRegistration,
+  getStudentsByYearSem, getCatalogSubjects, getAttendanceForYearSem, saveAttendanceBulk, getMarksForYearSem,
+} from "../utils/supabase";
+
+const TABS = ["Overview", "Student Management", "Marks & Attendance", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Events", "Announcements", "Notice Board", "Gallery"];
 const ALL_ROLES = ["student", "faculty", "admin", "placement"];
 const ROLE_LABELS_MAP = { student: "Student", faculty: "Faculty", admin: "Admin", placement: "Placement" };
 const SEM_SEQUENCE = [
@@ -39,6 +44,408 @@ const SEM_OPTIONS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 
 // year on the Events tab, since event_registrations only stores semester).
 const SEM_TO_YEAR_MAP = Object.fromEntries(SEM_SEQUENCE.map(({ year, sem }) => [sem, year]));
 
+// ══════════════════════════════════════════════════════════
+// MARKS & ATTENDANCE (Admin)
+//  - Attendance: editable (saved via saveAttendanceBulk, same path faculty uses)
+//  - Marks: READ-ONLY — admin cannot edit marks
+// ══════════════════════════════════════════════════════════
+function MarksAttendancePanel({ adminId }) {
+  const [year, setYear] = useState(SEM_SEQUENCE[0].year);
+  const [sem, setSem]   = useState(SEM_SEQUENCE[0].sem);
+  const [view, setView] = useState("Attendance");
+  const [search, setSearch] = useState("");
+
+  const [students, setStudents]       = useState([]);
+  const [subjects, setSubjects]       = useState([]);
+  const [attRows, setAttRows]         = useState([]);
+  const [assessments, setAssessments] = useState([]);
+  const [marks, setMarks]             = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [reloadKey, setReloadKey]     = useState(0);
+
+  const [attSubjectFilter, setAttSubjectFilter] = useState("all");
+  const [markSubjectId, setMarkSubjectId]       = useState("");
+
+  // edits: key "studentId|subjectId" -> { a: "12", t: "20" } (only changed cells)
+  const [edits, setEdits]       = useState({});
+  const [confirmRows, setConfirmRows] = useState(null);
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState(null); // { type: "ok" | "err", text }
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setEdits({});
+    Promise.all([
+      getStudentsByYearSem(year, sem),
+      getCatalogSubjects(year, sem),
+      getAttendanceForYearSem(year, sem),
+      getMarksForYearSem(year, sem),
+    ]).then(([st, sub, att, mk]) => {
+      if (cancelled) return;
+      setStudents((st || []).slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""))));
+      setSubjects(sub || []);
+      setAttRows(att || []);
+      setAssessments(mk.assessments || []);
+      setMarks(mk.marks || []);
+      setAttSubjectFilter("all");
+      setMarkSubjectId(sub?.[0]?.id != null ? String(sub[0].id) : "");
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [year, sem, reloadKey]);
+
+  const attMap = useMemo(() => {
+    const m = {};
+    attRows.forEach((r) => { m[`${r.student_id}|${r.subject_id}`] = r; });
+    return m;
+  }, [attRows]);
+
+  const markMap = useMemo(() => {
+    const m = {};
+    marks.forEach((r) => { m[`${r.student_id}|${r.assessment_id}`] = r; });
+    return m;
+  }, [marks]);
+
+  const filteredStudents = students.filter((s) => {
+    const q = search.trim().toLowerCase();
+    return !q || s.name?.toLowerCase().includes(q) || (s.usn || s.id)?.toLowerCase().includes(q);
+  });
+
+  const visibleSubjects = attSubjectFilter === "all"
+    ? subjects
+    : subjects.filter((s) => String(s.id) === attSubjectFilter);
+
+  const originalOf = (key) => {
+    const row = attMap[key];
+    return row
+      ? { a: String(row.attended_classes ?? 0), t: String(row.total_classes ?? 0) }
+      : { a: "", t: "" };
+  };
+
+  const cellOf = (key) => edits[key] || originalOf(key);
+
+  const setCell = (key, field, raw) => {
+    const value = raw.replace(/\D/g, "").slice(0, 4);
+    const next = { ...cellOf(key), [field]: value };
+    const orig = originalOf(key);
+    setEdits((prev) => {
+      const copy = { ...prev };
+      if (next.a === orig.a && next.t === orig.t) delete copy[key];
+      else copy[key] = next;
+      return copy;
+    });
+    setMsg(null);
+  };
+
+  const dirtyCount = Object.keys(edits).length;
+
+  const prepareSave = () => {
+    const rows = [];
+    for (const [key, v] of Object.entries(edits)) {
+      const [studentId, subjectId] = key.split("|");
+      if (v.a === "" && v.t === "") continue;
+      if (v.a === "" || v.t === "") {
+        setMsg({ type: "err", text: "Fill both attended and total classes (or clear both) before saving." });
+        return;
+      }
+      const attended = Number(v.a);
+      const total = Number(v.t);
+      if (attended > total) {
+        const stu = students.find((s) => s.id === studentId);
+        setMsg({ type: "err", text: `Attended classes can't be more than total classes (${stu?.name || studentId}).` });
+        return;
+      }
+      const subj = subjects.find((s) => String(s.id) === subjectId);
+      rows.push({
+        studentId, subjectId: subj ? subj.id : subjectId,
+        year, semLabel: sem,
+        attendedClasses: attended, totalClasses: total,
+      });
+    }
+    if (rows.length === 0) { setMsg({ type: "err", text: "Nothing to save." }); return; }
+    setConfirmRows(rows);
+  };
+
+  const executeSave = async () => {
+    if (!confirmRows) return;
+    setSaving(true);
+    const result = await saveAttendanceBulk(confirmRows, adminId);
+    setSaving(false);
+    if (result.ok) {
+      setMsg({ type: "ok", text: `✅ Saved attendance for ${result.count} entr${result.count === 1 ? "y" : "ies"}.` });
+      setConfirmRows(null);
+      setReloadKey((k) => k + 1);
+      setTimeout(() => setMsg(null), 4000);
+    } else {
+      setConfirmRows(null);
+      setMsg({ type: "err", text: "Failed to save: " + result.error });
+    }
+  };
+
+  const pctOf = (a, t) => {
+    const an = Number(a), tn = Number(t);
+    return tn > 0 && a !== "" ? Math.round((an / tn) * 100) : null;
+  };
+  const pctClass = (p) =>
+    p === null ? "text-[var(--color-text-muted)]" : p >= 75 ? "text-green-400" : p >= 60 ? "text-amber-400" : "text-red-400";
+
+  // Marks view data — one subject at a time
+  const markSubject = subjects.find((s) => String(s.id) === markSubjectId);
+  const markAssessments = assessments.filter((a) => {
+    if (String(a.subject_id) !== markSubjectId) return false;
+    const limit = a.subjects?.num_internals;
+    return !(limit && a.assessment_number > limit);
+  });
+
+  const selectCls = "bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer";
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 space-y-3">
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="text-[var(--color-text-secondary)] text-xs block mb-1">Year</label>
+            <select value={year} className={selectCls}
+              onChange={(e) => {
+                const y = e.target.value;
+                setYear(y);
+                setSem(SEM_SEQUENCE.find((s) => s.year === y)?.sem);
+              }}>
+              {["1st Year", "2nd Year", "3rd Year", "4th Year"].map((y) => <option key={y}>{y}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[var(--color-text-secondary)] text-xs block mb-1">Semester</label>
+            <select value={sem} onChange={(e) => setSem(e.target.value)} className={selectCls}>
+              {SEM_SEQUENCE.filter((s) => s.year === year).map((s) => <option key={s.sem}>{s.sem}</option>)}
+            </select>
+          </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍 Search by name or USN..."
+            className="flex-1 min-w-48 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2 text-[var(--color-text-primary)] text-sm placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)]"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {["Attendance", "Marks"].map((v) => (
+            <button key={v} onClick={() => { setView(v); setMsg(null); }}
+              className={`px-4 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-all
+                ${view === v
+                  ? "bg-[var(--color-accent-solid)] text-white"
+                  : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}>
+              {v === "Attendance" ? "📅 Attendance (editable)" : "🏆 Marks (view only)"}
+            </button>
+          ))}
+
+          {view === "Attendance" ? (
+            <select value={attSubjectFilter} onChange={(e) => setAttSubjectFilter(e.target.value)} className={selectCls + " ml-auto"}>
+              <option value="all">All subjects</option>
+              {subjects.map((s) => <option key={s.id} value={String(s.id)}>{s.subject_name}</option>)}
+            </select>
+          ) : (
+            <select value={markSubjectId} onChange={(e) => setMarkSubjectId(e.target.value)} className={selectCls + " ml-auto"}>
+              {subjects.length === 0 && <option value="">No subjects</option>}
+              {subjects.map((s) => <option key={s.id} value={String(s.id)}>{s.subject_name}</option>)}
+            </select>
+          )}
+        </div>
+
+        <p className="text-[var(--color-text-muted)] text-xs">
+          {year} · {sem} — {filteredStudents.length} of {students.length} students · {subjects.length} subject(s)
+        </p>
+      </div>
+
+      {msg && (
+        <div className={`rounded-xl px-4 py-3 text-sm border
+          ${msg.type === "ok" ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-red-500/10 border-red-500/30 text-red-400"}`}>
+          {msg.text}
+        </div>
+      )}
+
+      {loading && <p className="text-[var(--color-text-muted)] text-sm py-6 text-center">Loading…</p>}
+
+      {!loading && students.length === 0 && (
+        <div className="text-center py-10 text-[var(--color-text-muted)]">
+          <p className="text-4xl mb-2">🔍</p>
+          <p className="text-sm">No students found in {year} · {sem}.</p>
+        </div>
+      )}
+
+      {!loading && students.length > 0 && subjects.length === 0 && (
+        <div className="text-center py-10 text-[var(--color-text-muted)]">
+          <p className="text-sm">No subjects have been added for {sem} yet.</p>
+        </div>
+      )}
+
+      {/* ── ATTENDANCE (editable) ── */}
+      {!loading && view === "Attendance" && students.length > 0 && subjects.length > 0 && (
+        <>
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-surface-alt)]">
+                    <th className="text-left text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 sticky left-0 bg-[var(--color-bg-surface-alt)] min-w-44 z-[1]">Student</th>
+                    {visibleSubjects.map((s) => (
+                      <th key={s.id} className="text-center text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 min-w-36">
+                        {s.subject_name}
+                        <span className="block text-[var(--color-text-muted)] font-normal">attended / total</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.map((st) => (
+                    <tr key={st.id} className="border-b border-[var(--color-border)]/50">
+                      <td className="py-2 px-3 sticky left-0 bg-[var(--color-bg-surface)] z-[1]">
+                        <p className="text-[var(--color-text-primary)] text-xs font-semibold truncate max-w-40">{st.name}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">{st.usn || st.id}</p>
+                      </td>
+                      {visibleSubjects.map((sub) => {
+                        const key = `${st.id}|${sub.id}`;
+                        const cell = cellOf(key);
+                        const changed = !!edits[key];
+                        const p = pctOf(cell.a, cell.t);
+                        return (
+                          <td key={sub.id} className="py-2 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                inputMode="numeric"
+                                value={cell.a}
+                                onChange={(e) => setCell(key, "a", e.target.value)}
+                                placeholder="0"
+                                className={`w-12 text-center bg-[var(--color-bg-surface-alt)] border rounded-lg py-1 text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-solid)]
+                                  ${changed ? "border-amber-500" : "border-[var(--color-border)]"}`}
+                              />
+                              <span className="text-[var(--color-text-muted)] text-xs">/</span>
+                              <input
+                                inputMode="numeric"
+                                value={cell.t}
+                                onChange={(e) => setCell(key, "t", e.target.value)}
+                                placeholder="0"
+                                className={`w-12 text-center bg-[var(--color-bg-surface-alt)] border rounded-lg py-1 text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-solid)]
+                                  ${changed ? "border-amber-500" : "border-[var(--color-border)]"}`}
+                              />
+                            </div>
+                            <p className={`text-xs mt-1 font-medium ${pctClass(p)}`}>{p === null ? "—" : `${p}%`}</p>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  {filteredStudents.length === 0 && (
+                    <tr><td colSpan={visibleSubjects.length + 1} className="text-center py-8 text-[var(--color-text-muted)] text-sm">No students match your search.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-[var(--color-text-muted)] text-xs">
+              {dirtyCount > 0 ? `${dirtyCount} unsaved change${dirtyCount === 1 ? "" : "s"} (highlighted in amber)` : "No changes yet. Edit any cell to update attendance."}
+            </p>
+            <div className="flex gap-2">
+              {dirtyCount > 0 && (
+                <button onClick={() => { setEdits({}); setMsg(null); }}
+                  className="px-4 py-2 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer">
+                  Discard
+                </button>
+              )}
+              <button onClick={prepareSave} disabled={dirtyCount === 0}
+                className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                💾 Save Attendance{dirtyCount > 0 ? ` (${dirtyCount})` : ""}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── MARKS (read-only) ── */}
+      {!loading && view === "Marks" && students.length > 0 && subjects.length > 0 && (
+        <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-[var(--color-text-primary)] text-sm font-semibold">{markSubject?.subject_name || "—"}</p>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-surface-alt)] text-[var(--color-text-muted)]">🔒 Marks are entered by faculty — view only</span>
+          </div>
+          {markAssessments.length === 0 ? (
+            <p className="text-[var(--color-text-muted)] text-sm text-center py-8">Faculty hasn't set up any internals for this subject yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-surface-alt)]">
+                    <th className="text-left text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 sticky left-0 bg-[var(--color-bg-surface-alt)] min-w-44 z-[1]">Student</th>
+                    {markAssessments.map((a) => (
+                      <th key={a.id} className="text-center text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 whitespace-nowrap">
+                        Internal {a.assessment_number}
+                        <span className="block text-[var(--color-text-muted)] font-normal">
+                          max {a.max_marks}{a.is_published ? "" : " · unpublished"}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.map((st) => (
+                    <tr key={st.id} className="border-b border-[var(--color-border)]/50">
+                      <td className="py-2 px-3 sticky left-0 bg-[var(--color-bg-surface)] z-[1]">
+                        <p className="text-[var(--color-text-primary)] text-xs font-semibold truncate max-w-40">{st.name}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs">{st.usn || st.id}</p>
+                      </td>
+                      {markAssessments.map((a) => {
+                        const row = markMap[`${st.id}|${a.id}`];
+                        return (
+                          <td key={a.id} className="py-2 px-3 text-center text-xs text-[var(--color-text-primary)]">
+                            {row ? `${row.marks_obtained}/${a.max_marks}` : <span className="text-[var(--color-text-muted)]">—</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  {filteredStudents.length === 0 && (
+                    <tr><td colSpan={markAssessments.length + 1} className="text-center py-8 text-[var(--color-text-muted)] text-sm">No students match your search.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Confirm attendance save */}
+      {confirmRows && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[var(--color-text-primary)] font-bold text-lg mb-2">Confirm Attendance Changes</h3>
+            <p className="text-[var(--color-text-secondary)] text-sm mb-2">
+              Save <span className="text-[var(--color-text-primary)] font-medium">{confirmRows.length}</span> attendance entr{confirmRows.length === 1 ? "y" : "ies"} for{" "}
+              <span className="text-[var(--color-text-primary)] font-medium">{year} · {sem}</span>?
+            </p>
+            <p className="text-[var(--color-text-muted)] text-xs mb-6">
+              This overwrites the attendance previously entered by faculty for these students and subjects.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmRows(null)} disabled={saving}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={executeSave} disabled={saving}
+                className="flex-1 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-50 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                {saving ? "Saving..." : "Confirm Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const { user, updateStudentStatus, promoteStudent, detainStudent, removeStudent, getLoginLog, enrolledVersion, manageUserRoles, updateUserProfile } = useAuth();
   const {
@@ -49,8 +456,21 @@ export default function AdminDashboard() {
     addPromotion,
   } = useLMS();
 
+  const location = useLocation();
+
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeTab, setActiveTab]   = useState("Overview");
+  const [activeTab, setActiveTab]   = useState(
+    TABS.includes(location.state?.tab) ? location.state.tab : "Overview"
+  );
+
+  // Sidebar items navigate here with { state: { tab } } — switch tabs even
+  // when we're already on /admin (location.key changes on every navigation).
+  useEffect(() => {
+    const t = location.state?.tab;
+    setActiveTab(TABS.includes(t) ? t : "Overview");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
+
   const [annTitle, setAnnTitle]     = useState("");
   const [annTag, setAnnTag]         = useState("Notice");
   // Announcement targeting — either specific semester(s), or the whole branch.
@@ -811,6 +1231,11 @@ export default function AdminDashboard() {
                 })}
               </div>
             </div>
+          )}
+
+          {/* ── MARKS & ATTENDANCE ── */}
+          {activeTab === "Marks & Attendance" && (
+            <MarksAttendancePanel adminId={user?.id} />
           )}
 
           {/* ── FACULTY ── */}

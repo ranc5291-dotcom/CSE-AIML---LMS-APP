@@ -39,17 +39,17 @@ const NAV_ITEMS = {
     { icon: "⚙️", label: "Settings",      path: "/settings" },
   ],
   admin: [
-  { icon: "🏠", label: "Overview",           path: "/admin" },
-  { icon: "👥", label: "User Management",    path: "/admin" },
-  { icon: "🗓️", label: "Timetable",          path: "/timetable" }, // ← added
-  { icon: "📬", label: "Complaints",         path: "/admin" },
-  { icon: "📢", label: "Announcements",      path: "/admin" },
-  { icon: "🏆", label: "Marks & Attendance", path: "/admin" },
-  { icon: "📣", label: "Events",             path: "/events" },
-  { icon: "💰", label: "Funds",              path: "/funds" },
-  { icon: "💬", label: "Complaint Box",      path: "/complaints" },
-  { icon: "⚙️", label: "Settings",           path: "/settings" },
-],
+    { icon: "🏠", label: "Overview",           path: "/admin" },
+    { icon: "👥", label: "User Management",    path: "/admin", tab: "Student Management" },
+    { icon: "🗓️", label: "Timetable",          path: "/timetable" },
+    { icon: "📬", label: "Complaints",         path: "/admin", tab: "Complaints" },
+    { icon: "📢", label: "Announcements",      path: "/admin", tab: "Announcements" },
+    { icon: "🏆", label: "Marks & Attendance", path: "/admin", tab: "Marks & Attendance" },
+    { icon: "📣", label: "Events",             path: "/events" },
+    { icon: "💰", label: "Funds",              path: "/funds" },
+    { icon: "💬", label: "Complaint Box",      path: "/complaints" },
+    { icon: "⚙️", label: "Settings",           path: "/settings" },
+  ],
 };
 
 const ROLE_COLORS = {
