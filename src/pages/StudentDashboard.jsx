@@ -541,6 +541,12 @@ export default function StudentDashboard() {
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 3);
 
+  // Opens the Events page. If a specific event was clicked, its id is
+  // passed along so the Events page can scroll to / highlight that card.
+  const goToEvents = (eventId) => {
+    navigate("/events", { state: eventId ? { eventId } : undefined });
+  };
+
   // Notice Board — notices only. Announcements now render in their own
   // separate card below, instead of being merged into this list.
   const allNotices = (notices || [])
@@ -594,19 +600,31 @@ export default function StudentDashboard() {
 
           {upcomingEvents.length > 0 && (
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center justify-between gap-2 mb-3">
                 <h3 className="text-[var(--color-text-primary)] font-semibold text-sm">Upcoming Events</h3>
+                <button
+                  type="button"
+                  onClick={() => goToEvents()}
+                  className="text-[var(--color-accent-soft-text)] text-xs font-medium hover:opacity-80 cursor-pointer"
+                >
+                  View All →
+                </button>
               </div>
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {upcomingEvents.map((e) => (
-                  <div key={e.id} className="flex-shrink-0 bg-[var(--color-bg-surface-alt)] rounded-xl p-3 border border-[var(--color-border)] min-w-48">
+                  <button
+                    type="button"
+                    key={e.id}
+                    onClick={() => goToEvents(e.id)}
+                    className="flex-shrink-0 text-left bg-[var(--color-bg-surface-alt)] rounded-xl p-3 border border-[var(--color-border)] min-w-48 cursor-pointer hover:border-[var(--color-accent-solid)]/60 transition-all"
+                  >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full">{e.tag}</span>
                     </div>
                     <p className="text-[var(--color-text-primary)] text-xs font-semibold truncate">{e.title}</p>
                     <p className="text-[var(--color-text-muted)] text-xs mt-1">{e.date} - {e.time}</p>
                     <p className="text-[var(--color-text-muted)] text-xs">{e.venue}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
