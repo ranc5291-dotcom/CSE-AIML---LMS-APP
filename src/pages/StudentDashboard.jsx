@@ -390,7 +390,7 @@ function MyAttendancePanel({ sem, userId }) {
 // Cross-semester PYQ browser — this is deliberately NOT locked to the
 // current semester, since previous question papers stay useful for
 // reference/prep regardless of what semester the student is in now.
-function PreviousPYQPanel({ notes }) {
+function PreviousPYQPanel({ notes, onOpenPDF }) {
   const [pyqSem, setPyqSem] = useState(null); // null = "All"
   const pyqNotes = notes.filter((n) => n.type === "PYQ" && (!pyqSem || n.sem === pyqSem));
 
@@ -420,25 +420,30 @@ function PreviousPYQPanel({ notes }) {
             No previous question papers uploaded yet{pyqSem ? ` for ${pyqSem}` : ""}.
           </p>
         )}
-        {pyqNotes.map((note) => (
-          <div key={note.id} className="flex items-center gap-3 bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] p-3">
-            <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center text-lg flex-shrink-0">📕</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
-              <p className="text-[var(--color-text-muted)] text-xs">{note.subject} · {note.sem} · {note.uploadedBy}</p>
+        {pyqNotes.map((note) => {
+          const viewClass = note.fileUrl
+            ? "flex-1 py-2.5 text-xs font-medium cursor-pointer flex items-center justify-center gap-1 transition-all text-[var(--color-accent-soft-text)] hover:bg-[var(--color-accent-soft-bg)]"
+            : "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-[var(--color-text-muted)] cursor-not-allowed";
+          const downloadClass = note.fileUrl
+            ? "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-green-400 hover:bg-green-500/10 cursor-pointer"
+            : "flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-all text-[var(--color-text-muted)] pointer-events-none";
+          return (
+            <div key={note.id} className="bg-[var(--color-bg-surface-alt)] rounded-xl border border-[var(--color-border)] overflow-hidden hover:border-[var(--color-text-muted)] transition-all">
+              <div className="flex items-center gap-3 p-3">
+                <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center text-lg flex-shrink-0">📕</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[var(--color-text-primary)] text-xs font-medium truncate">{note.file}</p>
+                  <p className="text-[var(--color-text-muted)] text-xs">{note.subject} · {note.sem} · {note.uploadedBy}</p>
+                </div>
+              </div>
+              <div className="flex border-t border-[var(--color-border)]">
+                <button type="button" onClick={() => onOpenPDF(note.fileUrl, note.file)} disabled={!note.fileUrl} className={viewClass}>View</button>
+                <div className="w-px bg-[var(--color-border)]" />
+                <button type="button" onClick={() => downloadFile(note.fileUrl, note.file)} disabled={!note.fileUrl} className={downloadClass}>Download</button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => downloadFile(note.fileUrl, note.file)}
-              disabled={!note.fileUrl}
-              className={note.fileUrl
-                ? "px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs hover:bg-green-500/20 cursor-pointer flex-shrink-0"
-                : "px-3 py-1.5 bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] rounded-lg text-xs pointer-events-none flex-shrink-0"}
-            >
-              Download
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -885,7 +890,7 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              <PreviousPYQPanel notes={notes} />
+              <PreviousPYQPanel notes={notes} onOpenPDF={openPDF} />
             </div>
           )}
 
