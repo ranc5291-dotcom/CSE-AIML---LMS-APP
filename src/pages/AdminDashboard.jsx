@@ -310,6 +310,17 @@ const total = Number(v.t);
               {v === "Attendance" ? "📅 Attendance (editable)" : "🏆 Marks (view only)"}
             </button>
           ))}
+          {view === "Attendance" && (
+            <>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleUpload} className="hidden" />
+            <button
+            onClick={() => fileRef.current?.click()}
+            disabled={loading || subjects.length === 0}
+            className="px-4 py-1.5 rounded-xl text-xs font-medium cursor-pointer bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white">
+            📤 Upload Excel
+            </button>
+            </>
+            )}
 
           {view === "Attendance" ? (
             <select value={attSubjectFilter} onChange={(e) => setAttSubjectFilter(e.target.value)} className={selectCls + " ml-auto"}>
