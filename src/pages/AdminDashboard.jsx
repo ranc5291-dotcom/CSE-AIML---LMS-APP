@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth, getAllStudents, getAllFaculty, getAllPlacement, getAllAdmins } from "../context/AuthContext";
@@ -145,6 +146,66 @@ function MarksAttendancePanel({ adminId }) {
     return copy;
   });
   setMsg(null);
+};
+const fileRef = useRef(null);
+
+const handleUpload = async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const norm = (v) => String(v ?? "").trim().toUpperCase();
+
+    const stuByUsn = {};
+    students.forEach((st) => { stuByUsn[norm(st.usn || st.id)] = st; });
+
+    const found = {};
+    const missing = new Set();
+    const skippedSheets = [];
+    let invalid = 0;
+
+    wb.SheetNames.forEach((sheetName) => {
+      // match sheet to subject by code, then by name
+      let sub = subjects.find((s) => norm(s.subject_code) === norm(sheetName))
+             || subjects.find((s) => norm(s.subject_name) === norm(sheetName));
+      // single-sheet file + a subject picked in the dropdown
+      if (!sub && wb.SheetNames.length === 1 && attSubjectFilter !== "all") {
+        sub = subjects.find((s) => String(s.id) === attSubjectFilter);
+      }
+      if (!sub) { skippedSheets.push(sheetName); return; }
+
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
+      rows.forEach((raw) => {
+        const r = {};
+        Object.keys(raw).forEach((k) => { r[k.trim().toLowerCase()] = raw[k]; });
+        const st = stuByUsn[norm(r.usn)];
+        if (!st) { if (norm(r.usn)) missing.add(norm(r.usn)); return; }
+        const a = Number(r.attended), t = Number(r.total);
+        if (!Number.isInteger(a) || !Number.isInteger(t) || a < 0 || t < 0 || a > t) { invalid++; return; }
+        found[`${st.id}|${sub.id}`] = { a: String(a), t: String(t) };
+      });
+    });
+
+    setEdits((prev) => {
+      const copy = { ...prev };
+      Object.entries(found).forEach(([key, v]) => {
+        const o = originalOf(key);
+        if (v.a === o.a && v.t === o.t) delete copy[key];
+        else copy[key] = v;
+      });
+      return copy;
+    });
+
+    const count = Object.keys(found).length;
+    const parts = [`Loaded ${count} entr${count === 1 ? "y" : "ies"} from the file. Review, then click Save Attendance.`];
+    if (missing.size) parts.push(`${missing.size} USN(s) not found in ${year} · ${sem}.`);
+    if (invalid) parts.push(`${invalid} row(s) skipped (invalid numbers).`);
+    if (skippedSheets.length) parts.push(`Sheet(s) not matched to a subject: ${skippedSheets.join(", ")}.`);
+    setMsg({ type: count > 0 ? "ok" : "err", text: parts.join(" ") });
+  } catch (err) {
+    setMsg({ type: "err", text: "Could not read the file: " + err.message });
+  }
 };
 
   const dirtyCount = Object.keys(edits).length;
@@ -301,12 +362,12 @@ const total = Number(v.t);
                     <th className="text-left text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 sticky left-0 bg-[var(--color-bg-surface-alt)] min-w-44 z-[1]">Student</th>
                     {visibleSubjects.map((s) => (
                      <th key={s.id} className="text-center text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 min-w-36">
-  {s.subject_name}
-  <span className="block text-[var(--color-accent-solid)] font-semibold mt-0.5">
-    {s.subject_code || "—"}
-  </span>
-  <span className="block text-[var(--color-text-muted)] font-normal">attended / total</span>
-</th>
+                       {s.subject_name}
+                       <span className="block text-[var(--color-accent-solid)] font-semibold mt-0.5">
+                        {s.subject_code || "—"}
+                        </span>
+                        <span className="block text-[var(--color-text-muted)] font-normal">attended / total</span>
+                        </th>
                     ))}
                   </tr>
                 </thead>
