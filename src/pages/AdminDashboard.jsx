@@ -125,18 +125,27 @@ function MarksAttendancePanel({ adminId }) {
 
   const cellOf = (key) => edits[key] || originalOf(key);
 
-  const setCell = (key, field, raw) => {
-    const value = raw.replace(/\D/g, "").slice(0, 4);
-    const next = { ...cellOf(key), [field]: value };
-    const orig = originalOf(key);
-    setEdits((prev) => {
-      const copy = { ...prev };
-      if (next.a === orig.a && next.t === orig.t) delete copy[key];
-      else copy[key] = next;
-      return copy;
-    });
-    setMsg(null);
-  };
+ const setCell = (key, field, raw) => {
+  const value = raw.replace(/\D/g, "").slice(0, 4);
+  setEdits((prev) => {
+    const copy = { ...prev };
+    const apply = (k, patch) => {
+      const orig = originalOf(k);
+      const next = { ...(copy[k] || orig), ...patch };
+      if (next.a === orig.a && next.t === orig.t) delete copy[k];
+      else copy[k] = next;
+    };
+    if (field === "t") {
+      // total classes is per-subject, so copy it to every student
+      const subjectId = key.split("|")[1];
+      students.forEach((st) => apply(`${st.id}|${subjectId}`, { t: value }));
+    } else {
+      apply(key, { a: value });
+    }
+    return copy;
+  });
+  setMsg(null);
+};
 
   const dirtyCount = Object.keys(edits).length;
 
@@ -144,13 +153,13 @@ function MarksAttendancePanel({ adminId }) {
     const rows = [];
     for (const [key, v] of Object.entries(edits)) {
       const [studentId, subjectId] = key.split("|");
-      if (v.a === "" && v.t === "") continue;
-      if (v.a === "" || v.t === "") {
-        setMsg({ type: "err", text: "Fill both attended and total classes (or clear both) before saving." });
-        return;
-      }
-      const attended = Number(v.a);
-      const total = Number(v.t);
+     if (v.a === "" && v.t === "") continue;
+if (v.t === "") {
+  setMsg({ type: "err", text: "Enter total classes (or clear attended) before saving." });
+  return;
+}
+const attended = v.a === "" ? 0 : Number(v.a);
+const total = Number(v.t);
       if (attended > total) {
         const stu = students.find((s) => s.id === studentId);
         setMsg({ type: "err", text: `Attended classes can't be more than total classes (${stu?.name || studentId}).` });
@@ -183,10 +192,10 @@ function MarksAttendancePanel({ adminId }) {
     }
   };
 
-  const pctOf = (a, t) => {
-    const an = Number(a), tn = Number(t);
-    return tn > 0 && a !== "" ? Math.round((an / tn) * 100) : null;
-  };
+ const pctOf = (a, t) => {
+  const an = Number(a), tn = Number(t);
+  return tn > 0 ? Math.round((an / tn) * 100) : null;
+};
   const pctClass = (p) =>
     p === null ? "text-[var(--color-text-muted)]" : p >= 75 ? "text-green-400" : p >= 60 ? "text-amber-400" : "text-red-400";
 
@@ -291,10 +300,13 @@ function MarksAttendancePanel({ adminId }) {
                   <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-surface-alt)]">
                     <th className="text-left text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 sticky left-0 bg-[var(--color-bg-surface-alt)] min-w-44 z-[1]">Student</th>
                     {visibleSubjects.map((s) => (
-                      <th key={s.id} className="text-center text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 min-w-36">
-                        {s.subject_name}
-                        <span className="block text-[var(--color-text-muted)] font-normal">attended / total</span>
-                      </th>
+                     <th key={s.id} className="text-center text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 min-w-36">
+  {s.subject_name}
+  <span className="block text-[var(--color-accent-solid)] font-semibold mt-0.5">
+    {s.subject_code || "—"}
+  </span>
+  <span className="block text-[var(--color-text-muted)] font-normal">attended / total</span>
+</th>
                     ))}
                   </tr>
                 </thead>
