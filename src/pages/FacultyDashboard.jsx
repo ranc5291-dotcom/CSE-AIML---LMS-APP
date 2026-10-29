@@ -13,11 +13,13 @@ import {
   getMarksForAssessment, saveMarksBulk,
   getAttendanceForYearSem, saveAttendanceBulk,
 } from "../utils/supabase";
+import { parseSpreadsheetFile, parsePastedText, reconcile } from "../utils/attendanceUpload";
 import { downloadFile } from "../utils/download";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import PDFViewer from "../components/PDFViewer";
 import InternalMarksModal from "../components/InternalMarksModal";
+import AttendanceReviewModal from "../components/AttendanceReviewModal";
 
 const YEARS = [
   { label: "1st Year", sems: ["Sem 1", "Sem 2"] },
@@ -31,6 +33,11 @@ const TABS = ["My Subjects", "Upload Notes", "Assignments", "Attendance", "Notic
 // All semesters available for Notice Board targeting (independent of the
 // Year/Semester selector above, which only scopes Subjects/Notes/etc.)
 const SEM_OPTIONS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"];
+
+// Attendance cell helpers — a cell counts as "complete" only when both
+// Attended and Total are whole numbers (and Attended <= Total).
+const isBlank = (v) => v === undefined || v === null || String(v).trim() === "";
+const isWhole = (v) => /^\d+$/.test(String(v).trim());
 
 function SubjectCatalogModal({ initialYear, initialSem, onClose, onChanged }) {
   const [year, setYear] = useState(initialYear);
@@ -560,9 +567,13 @@ export default function FacultyDashboard() {
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [attendanceSaved, setAttendanceSaved] = useState("");
 
-  // ── ATTENDANCE — bulk upload via CSV/XLSX ─────────────────────
+  // ── ATTENDANCE — bulk upload via CSV/XLSX or pasted text ──────
   const [uploadSubjectId, setUploadSubjectId] = useState("");
   const [attendanceUploadMsg, setAttendanceUploadMsg] = useState("");
+  const [attendanceReview, setAttendanceReview] = useState(null); // { result, subjectId, subjectName }
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [publishCheck, setPublishCheck] = useState(null);         // { missing: [...], invalid: [...] }
   const attendanceUploadRef = useRef(null);
 
   const facultyId = user?.id;
@@ -636,6 +647,10 @@ export default function FacultyDashboard() {
   useEffect(() => {
     setUploadSubjectId("");
     setAttendanceUploadMsg("");
+    setAttendanceReview(null);
+    setPasteOpen(false);
+    setPasteText("");
+    setPublishCheck(null);
   }, [selectedYear.label, selectedSem]);
 
   const STUDENTS = [...semStudents].sort((a, b) => {
@@ -696,7 +711,7 @@ export default function FacultyDashboard() {
   // students: Name, USN, Attended, Total. Faculty fill in Attended/Total
   // and re-upload it — matching happens by USN (falls back to Name).
   const handleDownloadAttendanceTemplate = async () => {
-  const XLSX = await import("xlsx");
+    const XLSX = await import("xlsx");
     const rows = STUDENTS.length > 0
       ? STUDENTS.map((s) => ({ Name: s.name, USN: s.usn || s.id, Attended: "", Total: "" }))
       : [{ Name: "", USN: "", Attended: "", Total: "" }];
@@ -707,89 +722,125 @@ export default function FacultyDashboard() {
     XLSX.writeFile(wb, `Attendance_Template_${selectedSem.replace(/\s+/g, "_")}.xlsx`);
   };
 
-  // Reads an uploaded .xlsx/.xls/.csv sheet with columns Name, USN,
-  // Attended, Total and fills the on-screen Attended/Total inputs for the
-  // chosen subject — it does NOT save to the database by itself. Faculty
-  // still review the filled-in table and hit "Save & Notify Students".
-  const handleAttendanceFileUpload = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (!uploadSubjectId) {
-    alert("Please select which subject this sheet is for, first.");
-    if (attendanceUploadRef.current) attendanceUploadRef.current.value = "";
-    return;
-  }
-
-  const XLSX = await import("xlsx");
-
-  const reader = new FileReader();
-
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target.result);
-        const wb = XLSX.read(data, { type: "array" });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-        let matched = 0;
-        const unmatched = [];
-
-        rows.forEach((row) => {
-          // Accept a few common header variants/casings.
-          const usnRaw = String(row.USN ?? row.usn ?? row.Usn ?? "").trim();
-          const nameRaw = String(row.Name ?? row.name ?? "").trim();
-          const attendedRaw = row.Attended ?? row.attended ?? row["Attended Classes"] ?? "";
-          const totalRaw = row.Total ?? row.total ?? row["Total Classes"] ?? "";
-
-          if (!usnRaw && !nameRaw) return; // skip blank rows
-
-          let student = STUDENTS.find(
-            (s) => String(s.usn || s.id || "").trim().toLowerCase() === usnRaw.toLowerCase()
-          );
-          if (!student && nameRaw) {
-            student = STUDENTS.find(
-              (s) => String(s.name || "").trim().toLowerCase() === nameRaw.toLowerCase()
-            );
-          }
-
-          if (!student) {
-            unmatched.push(usnRaw || nameRaw);
-            return;
-          }
-
-          handleAttendanceEdit(student.id, uploadSubjectId, "attended", String(attendedRaw).trim());
-          handleAttendanceEdit(student.id, uploadSubjectId, "total", String(totalRaw).trim());
-          matched++;
-        });
-
-        setAttendanceUploadMsg(
-          unmatched.length > 0
-            ? `✅ Matched ${matched} student(s). ⚠️ Could not match by USN/Name: ${unmatched.join(", ")}`
-            : `✅ Matched ${matched} student(s). Review the values below, then Save & Notify Students.`
-        );
-        setTimeout(() => setAttendanceUploadMsg(""), 10000);
-      } catch (err) {
-        alert("Could not read that file. Please make sure it follows the template format (Name, USN, Attended, Total).");
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    if (attendanceUploadRef.current) attendanceUploadRef.current.value = "";
+  // Shared by file upload and pasted text: match the rows against this
+  // semester's students and open the review dialog. Nothing is filled in,
+  // saved, or sent to students until the review is applied.
+  const openAttendanceReview = (parsed, subjectId) => {
+    if (!parsed || parsed.length === 0) {
+      setAttendanceUploadMsg(
+        "⚠️ No attendance rows were found. Each row needs a USN and either Attended + Total columns or a value like 10 / 12."
+      );
+      return;
+    }
+    const row = activeSubjects.find((r) => String(r.subject_id) === String(subjectId));
+    setAttendanceUploadMsg("");
+    setAttendanceReview({
+      result: reconcile(parsed, STUDENTS),
+      subjectId,
+      subjectName: row?.subjects?.subject_name || "",
+    });
   };
 
-  const handleSaveAndNotifyAttendance = async () => {
-    setAttendanceSaving(true);
+  // Reads an uploaded .xlsx/.xls/.csv sheet (with or without headers).
+  const handleAttendanceFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (attendanceUploadRef.current) attendanceUploadRef.current.value = "";
+    if (!file) return;
+    if (!uploadSubjectId) {
+      alert("Please select which subject this sheet is for, first.");
+      return;
+    }
+    try {
+      const parsed = await parseSpreadsheetFile(file);
+      openAttendanceReview(parsed, uploadSubjectId);
+    } catch (err) {
+      setAttendanceUploadMsg("⚠️ Could not read that file. Upload a valid .xlsx, .xls or .csv file.");
+    }
+  };
+
+  // Reads rows pasted from a PDF / Word / Excel.
+  const handleReadPastedAttendance = () => {
+    if (!uploadSubjectId) {
+      alert("Please select which subject this list is for, first.");
+      return;
+    }
+    openAttendanceReview(parsePastedText(pasteText), uploadSubjectId);
+  };
+
+  // Called when the review dialog is applied: fills the on-screen table.
+  const applyAttendanceEntries = (subjectId, subjectName, entries) => {
+    setAttendanceEdits((p) => {
+      const next = { ...p };
+      entries.forEach(({ studentId, attended, total }) => {
+        next[studentId] = {
+          ...(next[studentId] || {}),
+          [subjectId]: { attended: String(attended), total: String(total) },
+        };
+      });
+      return next;
+    });
+    const untouched = Math.max(STUDENTS.length - entries.length, 0);
+    setAttendanceUploadMsg(
+      `✅ Filled attendance for ${entries.length} student(s)${subjectName ? ` in ${subjectName}` : ""}.` +
+      (untouched > 0 ? ` ${untouched} student(s) left unchanged.` : "") +
+      ` Nothing is saved or sent to students until you click "Save & Notify Students".`
+    );
+    setAttendanceReview(null);
+    setPasteOpen(false);
+    setPasteText("");
+  };
+
+  // Step 1 of publishing: look for students with no (or invalid) attendance
+  // and show them BEFORE anything is saved or sent.
+  const requestSaveAndNotify = () => {
+    const missing = [];
+    const invalid = [];
+    activeSubjects.forEach((row) => {
+      const sid = row.subject_id;
+      const subjectName = row.subjects?.subject_name || "Subject";
+      const noData = [];
+      STUDENTS.forEach((stu) => {
+        const v = attendanceEdits[stu.id]?.[sid];
+        if (isBlank(v?.attended) || isBlank(v?.total)) { noData.push(stu); return; }
+        if (!isWhole(v.attended) || !isWhole(v.total) || Number(v.attended) > Number(v.total)) {
+          invalid.push({ subjectName, student: stu, a: v.attended, t: v.total });
+        }
+      });
+      if (noData.length > 0) missing.push({ subjectName, students: noData });
+    });
+
+    if (missing.length === 0 && invalid.length === 0) {
+      doSaveAndNotifyAttendance();
+      return;
+    }
+    setPublishCheck({ missing, invalid });
+  };
+
+  // Step 2: save only COMPLETE entries (a blank cell is never saved as 0/0),
+  // then notify students.
+  const doSaveAndNotifyAttendance = async () => {
+    setPublishCheck(null);
     const rows = [];
     Object.entries(attendanceEdits).forEach(([studentId, subjectsMap]) => {
       Object.entries(subjectsMap).forEach(([subjectId, vals]) => {
+        if (isBlank(vals.attended) || isBlank(vals.total)) return;
+        if (!isWhole(vals.attended) || !isWhole(vals.total)) return;
+        if (Number(vals.attended) > Number(vals.total)) return;
         rows.push({
           studentId, subjectId,
-          attendedClasses: Number(vals.attended) || 0,
-          totalClasses: Number(vals.total) || 0,
+          attendedClasses: Number(vals.attended),
+          totalClasses: Number(vals.total),
           year: selectedYear.label, semLabel: selectedSem,
         });
       });
     });
 
+    if (rows.length === 0) {
+      alert("There is no complete attendance to save yet.");
+      return;
+    }
+
+    setAttendanceSaving(true);
     const res = await saveAttendanceBulk(rows, user?.name);
     if (!res.ok) {
       alert("Failed to save attendance: " + res.error);
@@ -806,8 +857,8 @@ export default function FacultyDashboard() {
       url: "/student",
     });
 
-    setAttendanceSaved("✅ Attendance saved — students notified.");
-    setTimeout(() => setAttendanceSaved(""), 3000);
+    setAttendanceSaved(`✅ Attendance saved for ${res.count} entr${res.count === 1 ? "y" : "ies"} — students notified.`);
+    setTimeout(() => setAttendanceSaved(""), 4000);
     setAttendanceSaving(false);
   };
 
@@ -1164,17 +1215,17 @@ export default function FacultyDashboard() {
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer ${sortBy === "usn" ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
                     USN {sortBy === "usn" && (sortDir === "asc" ? "▲" : "▼")}
                   </button>
-                  <button onClick={handleSaveAndNotifyAttendance} disabled={attendanceSaving || activeSubjects.length === 0}
+                  <button onClick={requestSaveAndNotify} disabled={attendanceSaving || activeSubjects.length === 0}
                     className="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white rounded-lg text-xs font-semibold cursor-pointer">
                     {attendanceSaving ? "Saving..." : "🔔 Save & Notify Students"}
                   </button>
                 </div>
               </div>
 
-              {/* Bulk upload — fill Attended/Total for a subject from a spreadsheet */}
+              {/* Bulk upload — fill Attended/Total for a subject from a spreadsheet or pasted text */}
               <div className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
                 <p className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider">
-                  📎 Bulk upload from spreadsheet
+                  📎 Bulk upload from spreadsheet or pasted list
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="flex-1 min-w-48">
@@ -1204,17 +1255,49 @@ export default function FacultyDashboard() {
                     className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-xs font-medium cursor-pointer whitespace-nowrap">
                     ⬆️ Upload Sheet
                   </button>
+                  <button
+                    onClick={() => setPasteOpen((o) => !o)}
+                    disabled={activeSubjects.length === 0}
+                    className="px-4 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] hover:bg-[var(--color-bg-hover)] disabled:opacity-40 text-[var(--color-text-primary)] rounded-xl text-xs font-medium cursor-pointer whitespace-nowrap">
+                    📋 {pasteOpen ? "Hide paste box" : "Paste list"}
+                  </button>
                   <input ref={attendanceUploadRef} type="file" accept=".csv,.xlsx,.xls"
                     onChange={handleAttendanceFileUpload} className="hidden" />
                 </div>
+
+                {pasteOpen && (
+                  <div className="space-y-2">
+                    <textarea
+                      value={pasteText}
+                      onChange={(e) => setPasteText(e.target.value)}
+                      rows={6}
+                      placeholder={"Paste rows copied from a PDF, Word or Excel, one student per line, e.g.\n3  1EW24CI001  ABHISHEK S  11 / 12  91.67%"}
+                      className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-xs text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] resize-y"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={handleReadPastedAttendance} disabled={!pasteText.trim() || !uploadSubjectId}
+                        className="px-4 py-2 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-xs font-medium cursor-pointer">
+                        🔍 Read pasted list
+                      </button>
+                      <button onClick={() => { setPasteText(""); setPasteOpen(false); }}
+                        className="px-4 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded-xl text-xs font-medium cursor-pointer">
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-[var(--color-text-muted)] text-[11px] leading-relaxed">
-                  Template columns: <span className="text-[var(--color-text-secondary)] font-medium">Name, USN, Attended, Total</span>.
-                  Download the template first — it's pre-filled with the students for {selectedSem}. Fill in Attended and Total,
-                  then upload it back here. Students are matched by USN (falls back to Name if USN doesn't match).
-                  This only fills the table below — nothing is saved until you click "Save &amp; Notify Students".
+                  Upload an Excel/CSV file (columns <span className="text-[var(--color-text-secondary)] font-medium">Name, USN, Attended, Total</span> — or a single
+                  column like "10 / 12"), or paste rows copied from your PDF. Students are matched by USN (spaces and letter case are ignored), then by name.
+                  Before anything is filled in you review a list of matched students, students missing from the file, and rows that need a check.
+                  Nothing is saved or sent to students until you click "Save &amp; Notify Students".
                 </p>
                 {attendanceUploadMsg && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-300 text-xs">{attendanceUploadMsg}</div>
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-300 text-xs flex items-start justify-between gap-3">
+                    <span>{attendanceUploadMsg}</span>
+                    <button onClick={() => setAttendanceUploadMsg("")} className="text-blue-300/70 hover:text-blue-200 cursor-pointer flex-shrink-0">✕</button>
+                  </div>
                 )}
               </div>
 
@@ -1462,6 +1545,80 @@ export default function FacultyDashboard() {
             ));
           }}
         />
+      )}
+
+      {/* Attendance upload review — shown before anything is filled in */}
+      {attendanceReview && (
+        <AttendanceReviewModal
+          result={attendanceReview.result}
+          subjectName={attendanceReview.subjectName}
+          onCancel={() => setAttendanceReview(null)}
+          onApply={(entries) => applyAttendanceEntries(attendanceReview.subjectId, attendanceReview.subjectName, entries)}
+        />
+      )}
+
+      {/* Pre-publish check — students with no / invalid attendance */}
+      {publishCheck && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl">
+            <div className="p-5 border-b border-[var(--color-border)]">
+              <h3 className="text-[var(--color-text-primary)] font-bold text-lg">Check attendance before notifying students</h3>
+              <p className="text-[var(--color-text-secondary)] text-xs mt-1">
+                {selectedYear.label} · {selectedSem}. Nothing has been saved or sent yet.
+              </p>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {publishCheck.invalid.length > 0 && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 space-y-1">
+                  <p className="text-red-400 text-xs font-semibold">
+                    {publishCheck.invalid.length} value(s) are not valid (whole numbers, attended no more than total)
+                  </p>
+                  <ul className="text-red-300 text-xs list-disc list-inside max-h-40 overflow-y-auto">
+                    {publishCheck.invalid.map((x, i) => (
+                      <li key={i}>{x.student.name} ({x.student.usn || x.student.id}) — {x.subjectName}: {x.a} / {x.t}</li>
+                    ))}
+                  </ul>
+                  <p className="text-red-300/80 text-[11px]">Fix these in the table before saving.</p>
+                </div>
+              )}
+
+              {publishCheck.missing.map((m) => (
+                <div key={m.subjectName} className="space-y-2">
+                  <p className="text-amber-400 text-xs font-semibold">
+                    {m.subjectName}: {m.students.length} student(s) have no attendance
+                  </p>
+                  <ul className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-xs text-[var(--color-text-primary)] space-y-1 max-h-40 overflow-y-auto">
+                    {m.students.map((s) => (
+                      <li key={s.id} className="flex justify-between gap-3">
+                        <span className="truncate">{s.name}</span>
+                        <span className="text-[var(--color-text-muted)] flex-shrink-0">{s.usn || s.id}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+
+              {publishCheck.missing.length > 0 && (
+                <p className="text-[var(--color-text-muted)] text-[11px]">
+                  If you continue, only students with complete attendance are saved. The others are left as they are (never saved as 0 / 0),
+                  and all students in {selectedSem} get the notification.
+                </p>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-[var(--color-border)] flex gap-3">
+              <button onClick={() => setPublishCheck(null)}
+                className="flex-1 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                Go back and fix
+              </button>
+              <button onClick={doSaveAndNotifyAttendance} disabled={publishCheck.invalid.length > 0}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] disabled:opacity-40 disabled:cursor-not-allowed text-[var(--color-text-primary)] rounded-xl text-sm font-medium cursor-pointer">
+                Save &amp; notify anyway
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
