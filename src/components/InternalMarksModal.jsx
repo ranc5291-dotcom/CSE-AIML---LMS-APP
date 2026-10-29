@@ -5,8 +5,17 @@ import {
   getSubjectAssessments, createAssessments, updateAssessmentMaxMarks,
   updateAssessmentPublish, getMarksForAssessment, saveMarksBulk,
 } from "../utils/supabase";
+import { normId, normName } from "../utils/attendanceUpload";
 import { useLMS } from "../context/LMSContext";
 import { useAuth } from "../context/AuthContext";
+
+// Header recognition for marks sheets (case / spacing / punctuation insensitive)
+const MARK_HEADERS = {
+  usn: ["usn", "usnno", "usnnumber", "rollno", "regno", "registerno"],
+  name: ["name", "studentname", "studentsname", "students", "student"],
+  marks: ["marksobtained", "marks", "marksscored", "obtained", "scored", "score"],
+};
+const headerKey = (c) => String(c ?? "").toLowerCase().replace(/[^a-z]/g, "");
 
 // ══════════════════════════════════════════════════════════
 // ONE INTERNAL'S PANEL — self-contained: owns its own max-marks
@@ -25,16 +34,21 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
   const [mode, setMode] = useState("manual"); // "manual" | "upload"
 
   const [rowsByStudent, setRowsByStudent] = useState({});
+  const [marksLoaded, setMarksLoaded] = useState(false);
   const [pending, setPending] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [maxMsg, setMaxMsg] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [publishCheckOpen, setPublishCheckOpen] = useState(false);
 
   const [excelFile, setExcelFile] = useState(null);
   const [excelStage, setExcelStage] = useState("idle");
   const [excelRows, setExcelRows] = useState([]);
+  const [excelMissing, setExcelMissing] = useState([]);
+  const [skipErrorRows, setSkipErrorRows] = useState(false);
   const [excelFormatError, setExcelFormatError] = useState("");
+  const [excelSaveError, setExcelSaveError] = useState("");
   const excelFileRef = useRef(null);
 
   const maxMarks = Number(assessment.max_marks) || 0;
@@ -52,11 +66,22 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
       return { studentId, marks: Number(val), name: stu?.name || "Unknown student", usn: stu?.usn || studentId };
     });
 
+  // Students of this class who have NO saved mark for this internal.
+  // (A saved 0 counts as a mark; only a missing row counts as "no marks".)
+  const studentsWithoutMarks = students.filter((s) => {
+    const v = rowsByStudent[s.id];
+    return v === undefined || v === null || v === "";
+  });
+
+  // Typed in the table but not saved yet — students would not see these.
+  const unsavedCount = Object.values(pending).filter((v) => v !== "" && v !== null && v !== undefined).length;
+
   const loadMarks = async () => {
     const rows = await getMarksForAssessment(assessment.id);
     const map = {};
     rows.forEach((r) => { map[r.student_id] = r.marks_obtained; });
     setRowsByStudent(map);
+    setMarksLoaded(true);
   };
 
   useEffect(() => { loadMarks(); /* eslint-disable-next-line */ }, [assessment.id]);
@@ -129,7 +154,23 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
     }
   };
 
-  const handlePublishToggle = async () => {
+  // ── Publish ──
+  // Unpublishing is immediate. Publishing first checks for students who
+  // would see no marks (or unsaved typed marks, or marks above the max)
+  // and shows them in a review dialog; if everything is complete it
+  // publishes straight away.
+  const requestPublishToggle = () => {
+    if (!assessment.is_published && !marksUsable) return;
+    if (assessment.is_published) { doPublishToggle(); return; }
+    if (studentsWithoutMarks.length > 0 || unsavedCount > 0 || studentsOverLimit.length > 0) {
+      setPublishCheckOpen(true);
+      return;
+    }
+    doPublishToggle();
+  };
+
+  const doPublishToggle = async () => {
+    setPublishCheckOpen(false);
     if (!assessment.is_published && !marksUsable) return;
     const wasPublished = !!assessment.is_published;
     setPublishing(true);
@@ -178,73 +219,131 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
   const handleValidate = async () => {
     if (!excelFile) return;
     setExcelFormatError("");
+    setExcelSaveError("");
+    setSkipErrorRows(false);
     const XLSX = await import("xlsx");
-    let rows;
+
+    let matrix;
     try {
       const buffer = await excelFile.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-      if (!Array.isArray(rows) || rows.length === 0) throw new Error("empty");
+      matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
+      if (!Array.isArray(matrix) || matrix.length === 0) throw new Error("empty");
     } catch {
       setExcelFormatError("Invalid file format or empty sheet. Upload a valid .xlsx, .xls, or .csv file.");
       return;
     }
 
+    // Find the header row (it need not be the first row) and the columns.
+    let headerIdx = -1;
+    let cols = {};
+    for (let i = 0; i < Math.min(matrix.length, 15); i++) {
+      const found = {};
+      (matrix[i] || []).forEach((cell, c) => {
+        const k = headerKey(cell);
+        Object.entries(MARK_HEADERS).forEach(([field, list]) => {
+          if (found[field] === undefined && list.includes(k)) found[field] = c;
+        });
+      });
+      if (found.usn !== undefined || found.name !== undefined) { headerIdx = i; cols = found; break; }
+    }
+    if (headerIdx === -1 || cols.marks === undefined) {
+      setExcelFormatError(
+        "Couldn't find the columns. The sheet needs a USN (or Name) column and a Marks column — use Download Template to get the right layout."
+      );
+      return;
+    }
+
     const seen = new Set();
-    const preview = rows.map((row, idx) => {
-      const usnRaw = row.USN ?? row.usn ?? "";
-      const scoredRaw = row["Marks Obtained"] ?? row.Marks ?? row.marks ?? "";
-      const usn = String(usnRaw).trim();
+    const preview = [];
+    matrix.forEach((cells, i) => {
+      if (i <= headerIdx || !cells) return;
+      if (cells.every((c) => String(c ?? "").trim() === "")) return; // blank row
+
+      const usn = String(cols.usn !== undefined ? cells[cols.usn] ?? "" : "").trim();
+      const fileName = String(cols.name !== undefined ? cells[cols.name] ?? "" : "").trim();
+      const scoredRaw = String(cells[cols.marks] ?? "").trim();
       const errors = [];
+      const warnings = [];
 
-      if (!usn) errors.push("Missing USN");
-      const globalStudent = allStudents.find((s) => String(s.usn || s.id).trim().toLowerCase() === usn.toLowerCase());
-      const enrolledStudent = students.find((s) => String(s.usn || s.id).trim().toLowerCase() === usn.toLowerCase());
-
-      if (usn && !globalStudent) errors.push("Invalid USN");
-      else if (usn && globalStudent && !enrolledStudent) errors.push("Student not enrolled in this subject/semester");
-
-      if (usn) {
-        const key = usn.toLowerCase();
-        if (seen.has(key)) errors.push("Duplicate student");
-        else seen.add(key);
+      // 1) match by USN (ignores spaces / hidden characters / case)
+      let student = usn ? students.find((s) => normId(s.usn || s.id) === normId(usn)) : null;
+      // 2) fall back to an exact (letters-only) name match, if unique
+      if (!student && fileName) {
+        const cands = students.filter((s) => normName(s.name) === normName(fileName));
+        if (cands.length === 1) {
+          student = cands[0];
+          warnings.push(usn ? "USN not found — matched by name" : "Matched by name");
+        }
       }
 
-      if (scoredRaw === "" || scoredRaw === null) {
+      if (!student) {
+        const elsewhere = usn ? allStudents.find((s) => normId(s.usn || s.id) === normId(usn)) : null;
+        if (elsewhere) errors.push("Student not enrolled in this subject/semester");
+        else errors.push(usn || fileName ? "Invalid USN" : "Missing USN");
+      } else {
+        if (seen.has(student.id)) errors.push("Duplicate student");
+        else seen.add(student.id);
+      }
+
+      if (scoredRaw === "") {
         // leave blank — not an error, just "no mark for this student" (skipped on save)
       } else if (isNaN(Number(scoredRaw))) errors.push("Enter valid marks");
       else if (Number(scoredRaw) > maxMarks) errors.push(`Enter valid marks (max ${maxMarks})`);
       else if (Number(scoredRaw) < 0) errors.push("Enter valid marks (cannot be negative)");
 
-      return {
-        rowIndex: idx + 2, usn,
-        name: enrolledStudent?.name || globalStudent?.name || "—",
-        studentId: enrolledStudent?.id || null,
-        scored: scoredRaw, errors,
-      };
+      preview.push({
+        rowIndex: i + 1,
+        usn,
+        name: student?.name || fileName || "—",
+        studentId: student?.id || null,
+        scored: scoredRaw,
+        errors,
+        warnings,
+      });
     });
 
+    if (preview.length === 0) {
+      setExcelFormatError("No student rows found below the header.");
+      return;
+    }
+
+    // Students of this class that the file gives NO marks for
+    // (not in the file at all, or a blank marks cell).
+    const withMark = new Set(
+      preview.filter((r) => r.studentId && r.errors.length === 0 && r.scored !== "").map((r) => r.studentId)
+    );
+    setExcelMissing(students.filter((s) => !withMark.has(s.id)));
     setExcelRows(preview);
     setExcelStage("previewing");
   };
 
   const excelHasErrors = excelRows.some((r) => r.errors.length > 0);
+  const excelErrorCount = excelRows.filter((r) => r.errors.length > 0).length;
   const excelSavableRows = excelRows.filter((r) => r.errors.length === 0 && r.scored !== "" && r.scored !== null);
+  const excelBlocked = excelHasErrors && !skipErrorRows;
 
   const handleConfirmExcel = async () => {
-    if (excelHasErrors || !marksUsable || excelSavableRows.length === 0) return;
+    if (excelBlocked || !marksUsable || excelSavableRows.length === 0) return;
     setExcelStage("saving");
+    setExcelSaveError("");
     const rows = excelSavableRows.map((r) => ({
       studentId: r.studentId, subjectId: subject.id, assessmentId: assessment.id, marksObtained: Number(r.scored),
     }));
-    await saveMarksBulk(rows, facultyId);
+    const res = await saveMarksBulk(rows, facultyId);
+    if (res && res.ok === false) {
+      setExcelSaveError("Save failed: " + res.error);
+      setExcelStage("previewing");
+      return;
+    }
     await loadMarks();
     setExcelStage("done");
   };
 
   const resetExcel = () => {
-    setExcelFile(null); setExcelRows([]); setExcelStage("idle"); setExcelFormatError("");
+    setExcelFile(null); setExcelRows([]); setExcelMissing([]); setExcelStage("idle");
+    setExcelFormatError(""); setExcelSaveError(""); setSkipErrorRows(false);
     if (excelFileRef.current) excelFileRef.current.value = "";
   };
 
@@ -252,13 +351,18 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
     <div className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl overflow-hidden">
       <button onClick={() => setExpanded((e) => !e)}
         className="w-full flex items-center justify-between px-4 py-3 cursor-pointer">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[var(--color-text-primary)] font-semibold text-sm">{`Internal ${assessment.assessment_number}`}</span>
           <span className="text-[var(--color-text-muted)] text-xs">max {maxMarks}</span>
           {assessment.is_published ? (
             <span className="text-[10px] px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full">Published</span>
           ) : (
             <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">Draft</span>
+          )}
+          {marksLoaded && students.length > 0 && studentsWithoutMarks.length > 0 && (
+            <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">
+              {studentsWithoutMarks.length} without marks
+            </span>
           )}
           {studentsOverLimit.length > 0 && (
             <span className="text-[10px] px-2 py-0.5 bg-red-500/20 text-red-400 rounded-full">
@@ -382,7 +486,11 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
                         {excelFile ? excelFile.name : "Click to browse Excel/CSV file"}
                       </p>
                       <input ref={excelFileRef} type="file" accept=".xlsx,.xls,.csv"
-                        onChange={(e) => { setExcelFile(e.target.files[0] || null); setExcelStage("idle"); setExcelRows([]); setExcelFormatError(""); }}
+                        onChange={(e) => {
+                          setExcelFile(e.target.files[0] || null);
+                          setExcelStage("idle"); setExcelRows([]); setExcelMissing([]);
+                          setExcelFormatError(""); setExcelSaveError("");
+                        }}
                         className="hidden" />
                     </div>
                     <button onClick={handleValidate} disabled={!excelFile || !marksUsable}
@@ -398,7 +506,9 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
                   {excelStage === "previewing" && (
                     <div className="space-y-3">
                       <p className={`text-xs font-medium ${excelHasErrors ? "text-amber-400" : "text-green-400"}`}>
-                        {excelHasErrors ? "Some rows have errors — fix them and re-upload before saving." : "All rows look good. Review below, then confirm to save."}
+                        {excelHasErrors
+                          ? `${excelErrorCount} row(s) have errors — fix the file and re-upload, or tick "Skip rows with errors" below.`
+                          : "All rows look good. Review below, then confirm to save."}
                       </p>
                       <div className="overflow-x-auto max-h-64 overflow-y-auto border border-[var(--color-border)] rounded-lg">
                         <table className="w-full text-xs">
@@ -419,17 +529,50 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
                                 <td className="py-1.5 px-2 text-[var(--color-text-primary)]">{r.name}</td>
                                 <td className="py-1.5 px-2 text-center text-[var(--color-text-primary)]">{r.scored === "" ? "—" : r.scored}</td>
                                 <td className="py-1.5 px-2">
-                                  {r.errors.length === 0 ? <span className="text-green-400">OK</span> : <span className="text-red-400">{r.errors.join(", ")}</span>}
+                                  {r.errors.length > 0
+                                    ? <span className="text-red-400">{r.errors.join(", ")}</span>
+                                    : r.warnings.length > 0
+                                      ? <span className="text-amber-400">{r.warnings.join(", ")}</span>
+                                      : <span className="text-green-400">OK</span>}
                                 </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
+
+                      {excelHasErrors && (
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-[var(--color-text-secondary)]">
+                          <input type="checkbox" checked={skipErrorRows} onChange={(e) => setSkipErrorRows(e.target.checked)}
+                            className="w-4 h-4 cursor-pointer accent-[var(--color-accent-solid)]" />
+                          Skip rows with errors and save only the valid rows
+                        </label>
+                      )}
+
+                      {excelMissing.length > 0 && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 space-y-1">
+                          <p className="text-amber-400 text-xs font-semibold">
+                            {excelMissing.length} student(s) get no marks from this file
+                          </p>
+                          <p className="text-amber-300/80 text-[11px]">
+                            They are missing from the file, or their marks cell is blank or has an error. Their current marks stay unchanged.
+                          </p>
+                          <ul className="text-amber-300 text-xs list-disc list-inside max-h-32 overflow-y-auto">
+                            {excelMissing.map((s) => (
+                              <li key={s.id}>{s.name} ({s.usn || s.id})</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {excelSaveError && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-xs">⚠️ {excelSaveError}</div>
+                      )}
+
                       <div className="flex gap-2">
-                        <button onClick={handleConfirmExcel} disabled={excelHasErrors || excelStage === "saving" || excelSavableRows.length === 0}
+                        <button onClick={handleConfirmExcel} disabled={excelBlocked || excelStage === "saving" || excelSavableRows.length === 0}
                           className="px-5 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer">
-                          {excelStage === "saving" ? "⏳ Saving..." : "✅ Confirm & Save"}
+                          {excelStage === "saving" ? "⏳ Saving..." : `✅ Confirm & Save (${excelSavableRows.length})`}
                         </button>
                         <button onClick={resetExcel}
                           className="px-4 py-2.5 bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded-xl text-sm font-medium cursor-pointer">
@@ -441,7 +584,7 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
 
                   {excelStage === "done" && (
                     <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-xs">
-                      ✅ Marks saved for {excelSavableRows.length} student(s).
+                      ✅ Marks saved for {excelSavableRows.length} student(s). Nothing is visible to students until you publish.
                     </div>
                   )}
                 </div>
@@ -449,7 +592,7 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
 
               {/* Publish */}
               <div className="pt-2 border-t border-[var(--color-border)] flex items-center gap-3">
-                <button onClick={handlePublishToggle} disabled={publishing || (!assessment.is_published && !marksUsable)}
+                <button onClick={requestPublishToggle} disabled={publishing || (!assessment.is_published && !marksUsable)}
                   className={`px-5 py-2 rounded-xl text-sm font-semibold cursor-pointer disabled:opacity-40
                     ${assessment.is_published ? "bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)]" : "bg-green-600 hover:bg-green-500 text-white"}`}>
                   {publishing ? "⏳ Working..." : assessment.is_published ? "↩️ Unpublish" : "📢 Publish Marks"}
@@ -460,6 +603,76 @@ function InternalPanel({ assessment, subject, facultyId, year, sem, students, al
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Pre-publish review */}
+      {publishCheckOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl">
+            <div className="p-5 border-b border-[var(--color-border)]">
+              <h3 className="text-[var(--color-text-primary)] font-bold text-lg">
+                Publish Internal {assessment.assessment_number} marks?
+              </h3>
+              <p className="text-[var(--color-text-secondary)] text-xs mt-1">
+                {subject.subject_name} · {students.length - studentsWithoutMarks.length} of {students.length} students have marks.
+                Students are notified as soon as you publish.
+              </p>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {unsavedCount > 0 && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+                  <p className="text-red-400 text-xs font-semibold">{unsavedCount} typed mark(s) are not saved yet</p>
+                  <p className="text-red-300/80 text-[11px] mt-0.5">Students would not see them. Click Save Marks first.</p>
+                </div>
+              )}
+
+              {studentsOverLimit.length > 0 && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+                  <p className="text-red-400 text-xs font-semibold">{studentsOverLimit.length} mark(s) are above the maximum ({maxMarks})</p>
+                  <ul className="text-red-300 text-xs list-disc list-inside mt-1">
+                    {studentsOverLimit.map((s) => (
+                      <li key={s.studentId}>{s.name} ({s.usn}) — {s.marks}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {studentsWithoutMarks.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-amber-400 text-xs font-semibold">
+                    {studentsWithoutMarks.length} student(s) have no marks
+                  </p>
+                  <ul className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-xs text-[var(--color-text-primary)] space-y-1 max-h-56 overflow-y-auto">
+                    {studentsWithoutMarks.map((s) => (
+                      <li key={s.id} className="flex justify-between gap-3">
+                        <span className="truncate">{s.name}</span>
+                        <span className="text-[var(--color-text-muted)] flex-shrink-0">{s.usn || s.id}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[var(--color-text-muted)] text-[11px]">
+                    If you publish now, these students will see no mark for this internal.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-[var(--color-border)] flex gap-3">
+              <button
+                onClick={() => { setPublishCheckOpen(false); setMode("manual"); setExpanded(true); }}
+                className="flex-1 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                Go back and enter marks
+              </button>
+              <button
+                onClick={doPublishToggle}
+                disabled={unsavedCount > 0 || studentsOverLimit.length > 0}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)] disabled:opacity-40 disabled:cursor-not-allowed text-[var(--color-text-primary)] rounded-xl text-sm font-medium cursor-pointer">
+                Publish anyway
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
