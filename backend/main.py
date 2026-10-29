@@ -24,16 +24,18 @@ app = FastAPI(
 # ── CORS (allow React frontend) ───────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins     = [
+    allow_origins = [
         "http://localhost:5173",
         "http://localhost:3000",
         "https://cse-aiml-lms-app.vercel.app",
     ],
+    # Also allow any Vercel deployment/preview URL, plus localhost and
+    # local-network IPs used for testing on a phone.
+    allow_origin_regex = r"https://.*\.vercel\.app|http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?",
     allow_credentials = True,
     allow_methods     = ["*"],
     allow_headers     = ["*"],
 )
-
 # ── ROUTERS ───────────────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(email_otp_router)
