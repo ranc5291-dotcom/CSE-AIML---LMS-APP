@@ -4,6 +4,7 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from firebase_admin import messaging, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from firebase_admin_init import get_firebase_app
 
@@ -29,10 +30,16 @@ class NotificationCreate(BaseModel):
     semester: Optional[str] = None
 
 
+def _norm(v) -> str:
+    """Normalise a value for comparison: trim, collapse spaces, lowercase."""
+    return " ".join(str(v or "").split()).lower()
+
+
 def _get_tokens(role: Optional[str], user_ids: Optional[List[str]],
-                 year: Optional[str] = None, semester: Optional[str] = None) -> List[str]:
+                year: Optional[str] = None, semester: Optional[str] = None) -> List[str]:
     tokens_ref = fs_client.collection("fcmTokens")
 
+    # ── Targeted by specific user ids ────────────────────────────
     if user_ids:
         # One round trip instead of one .get() per user.
         refs = [tokens_ref.document(uid) for uid in user_ids]
@@ -43,21 +50,37 @@ def _get_tokens(role: Optional[str], user_ids: Optional[List[str]],
                 token = (d.to_dict() or {}).get("token")
                 if token:
                     tokens.append(token)
+        print(f"[notifications] userIds={len(user_ids)} matched={len(tokens)}")
         return list(dict.fromkeys(tokens))  # de-duplicate, keep order
 
+    # ── Targeted by role (+ optional semester) ───────────────────
+    # We filter by role in Firestore, then match the semester in Python.
+    # This tolerates old token docs that still store "sem" instead of
+    # "semester", and stray spaces / casing differences.
+    # `year` is intentionally not checked: the semester already implies it,
+    # and year was the most fragile field to match.
     query = tokens_ref
     if role:
-        query = query.where("role", "==", role)
-    if year:
-        query = query.where("year", "==", year)
-    if semester:
-        query = query.where("semester", "==", semester)
+        query = query.where(filter=FieldFilter("role", "==", role))
 
     tokens = []
+    scanned = 0
     for d in query.stream():
-        token = (d.to_dict() or {}).get("token")
+        scanned += 1
+        data = d.to_dict() or {}
+
+        sem_val = data.get("semester") or data.get("sem")
+        if semester and _norm(sem_val) != _norm(semester):
+            continue
+
+        token = data.get("token")
         if token:
             tokens.append(token)
+
+    print(
+        f"[notifications] role={role!r} year={year!r} semester={semester!r} "
+        f"scanned={scanned} matched={len(tokens)}"
+    )
     return list(dict.fromkeys(tokens))  # de-duplicate, keep order
 
 
@@ -112,13 +135,24 @@ def send_notification(data: NotificationCreate):
         # Only remove tokens FCM says are permanently invalid. Temporary
         # failures must not delete a working device's token.
         for idx, resp in enumerate(response.responses):
-            if not resp.success and isinstance(resp.exception, messaging.UnregisteredError):
-                dead_tokens.append(batch_tokens[idx])
+            if not resp.success:
+                print(f"[notifications] send failed: {type(resp.exception).__name__}: {resp.exception}")
+                if isinstance(resp.exception, messaging.UnregisteredError):
+                    dead_tokens.append(batch_tokens[idx])
 
     for bad_token in dead_tokens:
-        docs = fs_client.collection("fcmTokens").where("token", "==", bad_token).stream()
+        docs = (
+            fs_client.collection("fcmTokens")
+            .where(filter=FieldFilter("token", "==", bad_token))
+            .stream()
+        )
         for d in docs:
             d.reference.delete()
+
+    print(
+        f"[notifications] done success={success_count} "
+        f"failure={failure_count} targeted={len(tokens)}"
+    )
 
     return {
         "success_count": success_count,
