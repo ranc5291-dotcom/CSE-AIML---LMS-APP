@@ -66,21 +66,23 @@ export default function Funds() {
 
   // ── Payment Requests (Student submits, Admin/Faculty view+approve) ──
   const [payAmount, setPayAmount] = useState("");
-  const [payRef, setPayRef]       = useState("");
+  const [payReason, setPayReason] = useState("");
   const [payProof, setPayProof]   = useState(null);
   const [paySaving, setPaySaving] = useState(false);
   const [paySuccess, setPaySuccess] = useState("");
 
   const handleSubmitPayment = async () => {
     if (!payAmount) { alert("Enter the amount you paid."); return; }
+    if (!payReason.trim()) { alert("Enter the reason for this fund request."); return; }
     setPaySaving(true);
+    // The reason is saved in the same column the transaction reference used.
     const res = await addFundPaymentRequest({
       studentId: user?.id, studentName: user?.name,
-      amount: payAmount, transactionRef: payRef, proofFile: payProof,
+      amount: payAmount, transactionRef: payReason.trim(), proofFile: payProof,
     });
     setPaySaving(false);
     if (!res.ok) { alert("Failed to submit: " + res.error); return; }
-    setPayAmount(""); setPayRef(""); setPayProof(null);
+    setPayAmount(""); setPayReason(""); setPayProof(null);
     setPaySuccess("✅ Payment submitted. Admin/Faculty will verify it shortly.");
     setTimeout(() => setPaySuccess(""), 4000);
     loadAll();
@@ -222,6 +224,7 @@ export default function Funds() {
                       <tr className="border-b border-[var(--color-border)]">
                         <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4">Student</th>
                         <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4">Amount</th>
+                        <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4">Reason</th>
                         <th className="text-left text-[var(--color-text-secondary)] text-xs py-2 pr-4">Status</th>
                         {(isAdmin || isFaculty) && <th className="text-left text-[var(--color-text-secondary)] text-xs py-2">Action</th>}
                       </tr>
@@ -231,6 +234,9 @@ export default function Funds() {
                         <tr key={r.id} className="border-b border-[var(--color-border)]/50">
                           <td className="py-3 pr-4 text-[var(--color-text-primary)] text-xs">{r.student_name}</td>
                           <td className="py-3 pr-4 text-[var(--color-text-primary)] text-xs">₹{Number(r.amount).toLocaleString()}</td>
+                          <td className="py-3 pr-4 text-[var(--color-text-secondary)] text-xs max-w-56 whitespace-pre-wrap break-words">
+                            {r.reason || r.transaction_ref || "—"}
+                          </td>
                           <td className="py-3 pr-4">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium
                               ${r.status === "Approved" ? "bg-green-500/20 text-green-400" :
@@ -254,7 +260,7 @@ export default function Funds() {
                         </tr>
                       ))}
                       {visibleRequests.length === 0 && (
-                        <tr><td colSpan={4} className="py-6 text-center text-[var(--color-text-muted)] text-sm">No payment requests yet.</td></tr>
+                        <tr><td colSpan={5} className="py-6 text-center text-[var(--color-text-muted)] text-sm">No payment requests yet.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -299,12 +305,13 @@ export default function Funds() {
                   <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)}
                     placeholder="Amount (₹)"
                     className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
-                  <input value={payRef} onChange={(e) => setPayRef(e.target.value)}
-                    placeholder="Transaction ID"
-                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)]" />
+                  <textarea value={payReason} onChange={(e) => setPayReason(e.target.value)}
+                    placeholder="Reason for the fund request (e.g. Department event, workshop)"
+                    rows={3}
+                    className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-solid)] placeholder-[var(--color-text-muted)] resize-none" />
                   <input type="file" accept="image/*" onChange={(e) => setPayProof(e.target.files[0])}
                     className="w-full text-[var(--color-text-secondary)] text-xs" />
-                  <button onClick={handleSubmitPayment} disabled={!payAmount || paySaving}
+                  <button onClick={handleSubmitPayment} disabled={!payAmount || !payReason.trim() || paySaving}
                     className="w-full py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer">
                     {paySaving ? "Submitting..." : "Submit Payment"}
                   </button>
