@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { supabase } from "../utils/supabase";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import AIAssistantWidget from "../components/AIAssistantWidget";
@@ -61,6 +62,16 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
   const [pwMsg, setPwMsg]         = useState(null);
   const [pwSaving, setPwSaving]   = useState(false);
 
+  // Student-only: correct USN and batch years entered by mistake at registration
+  const isStudent = user?.role === "student";
+  const curStart  = String(user?.admission_year || user?.start_year || "");
+  const curEnd    = String(user?.end_year || (curStart ? Number(curStart) + 4 : ""));
+  const [usn, setUsn]             = useState(user?.usn || "");
+  const [startYear, setStartYear] = useState(curStart);
+  const [endYear, setEndYear]     = useState(curEnd);
+  const [acadMsg, setAcadMsg]     = useState(null);
+  const [acadSaving, setAcadSaving] = useState(false);
+
   const hasPasswordLogin = !!user?.uid;
 
   const handleSaveProfile = async () => {
@@ -76,6 +87,100 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
     } else {
       setProfileMsg({ type: "error", text: result.error || "Could not update profile." });
     }
+  };
+
+  const handleStartYearChange = (e) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+    // keep the end year in step (start + 4) unless the student set it to something else
+    const followsStart = endYear === "" || endYear === String(Number(startYear) + 4);
+    setStartYear(val);
+    if (followsStart) setEndYear(val.length === 4 ? String(Number(val) + 4) : "");
+  };
+
+  const handleSaveAcademic = async () => {
+    setAcadMsg(null);
+    const newUsn = usn.trim().toUpperCase().replace(/\s+/g, "");
+    const s = Number(startYear);
+    const e = Number(endYear);
+
+    if (!newUsn) { setAcadMsg({ type: "error", text: "USN cannot be empty." }); return; }
+    if (newUsn.length > 20) { setAcadMsg({ type: "error", text: "USN is too long." }); return; }
+    if (!/^\d{4}$/.test(startYear) || !/^\d{4}$/.test(endYear)) {
+      setAcadMsg({ type: "error", text: "Enter the start and end year as 4 digits, e.g. 2023 and 2027." });
+      return;
+    }
+    if (s < 2000 || s > new Date().getFullYear() + 1) {
+      setAcadMsg({ type: "error", text: "That admission year doesn't look right." });
+      return;
+    }
+    if (e <= s || e - s > 6) {
+      setAcadMsg({ type: "error", text: "End year must be after the start year (usually 4 years later)." });
+      return;
+    }
+
+    const oldUsn = user?.usn || "";
+    const changes = [];
+    if (newUsn !== oldUsn) changes.push({ field: "usn", label: "USN", oldV: oldUsn, newV: newUsn });
+    if (startYear !== curStart) changes.push({ field: "admission_year", label: "Admission year", oldV: curStart, newV: startYear });
+    if (endYear !== curEnd) changes.push({ field: "end_year", label: "End year", oldV: curEnd, newV: endYear });
+
+    if (changes.length === 0) {
+      setAcadMsg({ type: "error", text: "Nothing to change — these are already your saved details." });
+      return;
+    }
+
+    const summary = changes.map((c) => `${c.label}: ${c.oldV || "—"}  →  ${c.newV}`).join("\n");
+    if (!window.confirm(`Save these changes?\n\n${summary}\n\nThe admin can see this change.`)) return;
+
+    setAcadSaving(true);
+    try {
+      if (newUsn !== oldUsn) {
+        const { data: clash, error: clashErr } = await supabase
+          .from("profiles").select("id").eq("usn", newUsn).neq("id", user.id).limit(1);
+        if (clashErr) throw clashErr;
+        if (clash && clash.length > 0) {
+          setAcadMsg({ type: "error", text: "This USN is already registered to another student." });
+          setAcadSaving(false);
+          return;
+        }
+      }
+
+      const result = await updateUserProfile(user.id, {
+        usn: newUsn,
+        admission_year: s,
+        start_year: startYear,
+        end_year: endYear,
+      });
+      if (!result.success) throw new Error(result.error || "Could not save.");
+
+      // Record who changed what (before -> after) so the admin can see it.
+      const { error: logErr } = await supabase.from("profile_change_log").insert(
+        changes.map((c) => ({
+          student_id: user.id,
+          student_name: user.name || null,
+          student_usn: newUsn,
+          student_email: user.email || null,
+          field: c.field,
+          old_value: c.oldV || null,
+          new_value: c.newV,
+          changed_by: user.id,
+          changed_by_name: user.name || null,
+          changed_by_role: user.role || "student",
+        }))
+      );
+      if (logErr) console.warn("Change log not saved:", logErr.message);
+
+      setUsn(newUsn);
+      setAcadMsg({
+        type: "success",
+        text: newUsn !== oldUsn
+          ? "Saved. Your admin can see this change. Use your new USN the next time you sign in."
+          : "Saved. Your admin can see this change.",
+      });
+    } catch (err) {
+      setAcadMsg({ type: "error", text: err.message || "Could not save changes." });
+    }
+    setAcadSaving(false);
   };
 
   const handleChangePassword = async () => {
@@ -123,6 +228,48 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
           {profileSaving ? "Saving..." : "Save Changes"}
         </button>
       </div>
+
+      {isStudent && (
+        <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
+          <div>
+            <h3 className="text-[var(--color-text-primary)] font-semibold">🎓 Academic Details</h3>
+            <p className="text-[var(--color-text-muted)] text-xs mt-1">
+              Entered something wrong while registering? Correct your USN and batch years here.
+              Every change is recorded and visible to the admin.
+            </p>
+          </div>
+
+          <Field label="USN" value={usn} onChange={(e) => setUsn(e.target.value.toUpperCase())} placeholder="e.g. 1MS22AI045" />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Batch starts (admission year)" value={startYear} onChange={handleStartYearChange} placeholder="e.g. 2023" />
+            <Field label="Batch ends (final year)" value={endYear}
+              onChange={(e) => setEndYear(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="e.g. 2027" />
+          </div>
+
+          {/^\d{4}$/.test(startYear) && /^\d{4}$/.test(endYear) && (
+            <p className="text-[var(--color-text-secondary)] text-xs">
+              Batch: <span className="text-[var(--color-text-primary)] font-semibold">{startYear} – {endYear}</span>
+            </p>
+          )}
+
+          <p className="text-[var(--color-text-muted)] text-xs">
+            Your USN is also your sign-in ID, so use the new one next time you log in. Your marks, attendance and
+            backlogs stay with you.
+          </p>
+
+          {acadMsg && (
+            <div className={`rounded-xl px-4 py-3 text-sm border ${msgClass(acadMsg.type)}`}>
+              {acadMsg.text}
+            </div>
+          )}
+
+          <button onClick={handleSaveAcademic} disabled={acadSaving}
+            className="px-5 py-2.5 bg-gradient-to-r from-[var(--color-accent-from)] to-[var(--color-accent-to)] hover:opacity-90 disabled:opacity-50 text-white rounded-xl text-sm font-semibold cursor-pointer transition-all">
+            {acadSaving ? "Saving..." : "Save Academic Details"}
+          </button>
+        </div>
+      )}
 
       {hasPasswordLogin ? (
         <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-4">
@@ -174,6 +321,12 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
             <div>
               <p className="text-[var(--color-text-muted)] text-xs uppercase tracking-wider mb-1">Year / Semester</p>
               <p className="text-[var(--color-text-primary)]">{user.year} · {user.sem}</p>
+            </div>
+          )}
+          {isStudent && curStart && (
+            <div>
+              <p className="text-[var(--color-text-muted)] text-xs uppercase tracking-wider mb-1">Batch</p>
+              <p className="text-[var(--color-text-primary)]">{curStart} – {curEnd}</p>
             </div>
           )}
           {user?.subject && (

@@ -33,6 +33,105 @@ const batchKey = (s) => {
 };
 const batchLabel = (k) => (k === "Unknown" ? "Batch not set" : k.replace("-", " – "));
 
+// ── Profile changes made by students (USN / batch years) ──
+const FIELD_LABEL = { usn: "USN", admission_year: "Admission year", end_year: "End year" };
+
+// One student save writes one row per changed field with the same timestamp,
+// so group them back into a single "who changed what" entry.
+function groupLog(rows) {
+  const map = {};
+  rows.forEach((r) => {
+    const k = `${r.student_id || r.student_usn}|${r.created_at}`;
+    if (!map[k]) {
+      map[k] = {
+        key: k,
+        studentId: r.student_id,
+        name: r.student_name,
+        usn: r.student_usn,
+        email: r.student_email,
+        by: r.changed_by_name,
+        byRole: r.changed_by_role,
+        at: r.created_at,
+        changes: [],
+      };
+    }
+    map[k].changes.push({ field: r.field, oldV: r.old_value, newV: r.new_value });
+  });
+  return Object.values(map).sort((a, b) => new Date(b.at) - new Date(a.at));
+}
+
+function ChangeEntry({ g, onOpen }) {
+  const when = g.at ? new Date(g.at) : null;
+  return (
+    <div className="bg-[var(--color-bg-surface-alt)] rounded-xl p-3 border-l-4 border-amber-500 space-y-1.5">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-[var(--color-text-primary)] text-sm font-semibold">
+            {g.name || "A student"} <span className="text-[var(--color-text-muted)] font-normal text-xs">changed their details</span>
+          </p>
+          <p className="text-[var(--color-text-muted)] text-xs">
+            🪪 {g.usn || "—"} · 📧 {g.email || "—"} · {g.byRole || "student"}
+          </p>
+        </div>
+        {onOpen && g.studentId && (
+          <button onClick={() => onOpen(g.studentId)}
+            className="px-2.5 py-1 text-xs rounded-lg bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-accent-soft-text)] cursor-pointer">
+            View student
+          </button>
+        )}
+      </div>
+      <div className="space-y-1">
+        {g.changes.map((c, i) => (
+          <p key={i} className="text-xs text-[var(--color-text-secondary)]">
+            <span className="font-medium text-[var(--color-text-primary)]">{FIELD_LABEL[c.field] || c.field}:</span>{" "}
+            <span className="text-red-400 line-through">{c.oldV || "—"}</span>{" "}
+            <span className="text-[var(--color-text-muted)]">→</span>{" "}
+            <span className="text-green-400 font-semibold">{c.newV}</span>
+          </p>
+        ))}
+      </div>
+      <p className="text-[var(--color-text-muted)] text-xs">
+        Changed by {g.by || g.name || "the student"}{when ? ` · ${when.toLocaleDateString()} ${when.toLocaleTimeString()}` : ""}
+      </p>
+    </div>
+  );
+}
+
+function ChangeLogPanel({ log, logErr, onOpen }) {
+  const [showAll, setShowAll] = useState(false);
+  const groups = useMemo(() => groupLog(log), [log]);
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recent = groups.filter((g) => g.at && new Date(g.at).getTime() >= weekAgo).length;
+  const shown = showAll ? groups : groups.slice(0, 3);
+
+  return (
+    <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h4 className="text-[var(--color-text-primary)] font-semibold text-sm">🔔 Profile changes by students</h4>
+        <div className="flex items-center gap-2">
+          {recent > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">{recent} in the last 7 days</span>
+          )}
+          <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-surface-alt)] text-[var(--color-text-muted)]">{groups.length} total</span>
+        </div>
+      </div>
+      {logErr && <p className="text-red-400 text-xs">{logErr}</p>}
+      {!logErr && groups.length === 0 && (
+        <p className="text-[var(--color-text-muted)] text-xs">
+          No changes yet. When a student corrects their USN or batch years in Settings, it shows up here.
+        </p>
+      )}
+      {shown.map((g) => <ChangeEntry key={g.key} g={g} onOpen={onOpen} />)}
+      {groups.length > 3 && (
+        <button onClick={() => setShowAll((v) => !v)}
+          className="text-xs text-[var(--color-accent-soft-text)] cursor-pointer">
+          {showAll ? "Show less" : `Show all ${groups.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Call this whenever an admin changes a student's status (used by AdminDashboard).
 export async function logStatusEvent({ studentId, event, year, sem, remarks, by }) {
   const { error } = await supabase.from("student_status_history").insert({
@@ -285,12 +384,13 @@ function SemesterPerformance({ student }) {
 }
 
 // ── Full details of one student ──
-function StudentDetail({ student, history, adminName, onClose, onChanged }) {
+function StudentDetail({ student, history, changeLog = [], adminName, onClose, onChanged }) {
   const [section, setSection] = useState("Backlogs");
   const status = student.status || "active";
   const a = startOf(student);
   const e = endOf(student);
   const rows = history.filter((h) => h.student_id === student.id);
+  const profileChanges = groupLog(changeLog.filter((r) => r.student_id === student.id));
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -345,6 +445,12 @@ function StudentDetail({ student, history, adminName, onClose, onChanged }) {
           {section === "Marks & Attendance" && <SemesterPerformance student={student} />}
           {section === "History" && (
             <div className="space-y-2">
+              {profileChanges.length > 0 && (
+                <div className="space-y-2 pb-2">
+                  <p className="text-[var(--color-text-secondary)] text-xs font-semibold">Profile changes</p>
+                  {profileChanges.map((g) => <ChangeEntry key={g.key} g={g} />)}
+                </div>
+              )}
               {rows.length === 0 && (
                 <p className="text-[var(--color-text-muted)] text-sm">
                   No status changes recorded yet. Promotions, detentions and transfers are logged from now on.
@@ -374,6 +480,8 @@ export default function StudentRecords({ adminName }) {
   const [students, setStudents] = useState([]);
   const [backlogs, setBacklogs] = useState([]);
   const [history, setHistory] = useState([]);
+  const [changeLog, setChangeLog] = useState([]);
+  const [logErr, setLogErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -394,7 +502,8 @@ export default function StudentRecords({ adminName }) {
         .eq("role", "student"),
       supabase.from("student_backlogs").select("*"),
       supabase.from("student_status_history").select("*").order("created_at", { ascending: false }),
-    ]).then(([p, b, h]) => {
+      supabase.from("profile_change_log").select("*").order("created_at", { ascending: false }).limit(300),
+    ]).then(([p, b, h, cl]) => {
       if (c) return;
       if (p.error) setLoadErr("Could not load students: " + p.error.message);
       else if (b.error || h.error) setLoadErr("Run the SQL for student_backlogs and student_status_history first. " + (b.error?.message || h.error?.message));
@@ -402,6 +511,8 @@ export default function StudentRecords({ adminName }) {
       setStudents(p.data || []);
       setBacklogs(b.data || []);
       setHistory(h.data || []);
+      setChangeLog(cl.data || []);
+      setLogErr(cl.error ? "Run the SQL for profile_change_log to see student changes. " + cl.error.message : "");
       setLoading(false);
     });
     return () => { c = true; };
@@ -530,6 +641,8 @@ export default function StudentRecords({ adminName }) {
 
       {!loading && (
         <>
+          <ChangeLogPanel log={changeLog} logErr={logErr} onOpen={(id) => setOpenId(id)} />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <button onClick={() => setBatch("All")}
               className={`text-left rounded-2xl p-4 border cursor-pointer transition-all
@@ -612,6 +725,7 @@ export default function StudentRecords({ adminName }) {
         <StudentDetail
           student={openStudent}
           history={history}
+          changeLog={changeLog}
           adminName={adminName}
           onClose={() => setOpenId(null)}
           onChanged={() => setReloadKey((k) => k + 1)}
