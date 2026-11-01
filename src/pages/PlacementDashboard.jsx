@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
@@ -17,6 +18,34 @@ const UPLOAD_CATEGORIES = [
 ];
 
 const TABS = ["Companies", "DSA Questions", "Resources"];
+
+// "Aptitude Test" in the sidebar opens Resources, showing only these categories.
+const APTITUDE_CATEGORIES = ["Aptitude Material", "Mock Test"];
+
+// Sidebar items send a tab name when clicked. Match it forgivingly
+// (case / spacing) and map the sidebar's labels onto this page's tabs.
+const TAB_ALIASES = {
+  "dashboard": "Companies",
+  "overview": "Companies",
+  "home": "Companies",
+  "companies": "Companies",
+  "company": "Companies",
+  "dsa questions": "DSA Questions",
+  "dsa": "DSA Questions",
+  "resources": "Resources",
+  "upload data": "Resources",
+  "upload": "Resources",
+  "uploads": "Resources",
+  "aptitude test": "Resources",
+  "aptitude": "Resources",
+};
+
+function resolveTab(raw) {
+  if (!raw) return null;
+  const key = String(raw).trim().toLowerCase();
+  const exact = TABS.find((t) => t.toLowerCase() === key);
+  return exact || TAB_ALIASES[key] || null;
+}
 
 const DSA_SORT_OPTIONS = [
   { key: "title",      label: "Problem" },
@@ -43,15 +72,42 @@ export default function PlacementDashboard() {
     placementUploads, addPlacementUpload, removePlacementUpload,
   } = useLMS();
 
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Checks the full set of roles granted to this account (via multi-role
   // access), not just their original signup role — so someone given
   // placement access from a different primary role (e.g. faculty) still
   // gets edit/upload/remove rights here.
   const isOfficer = hasAnyRole(["placement", "admin"]);
 
+  // Which tab the sidebar asked for: navigation state first, then ?tab=
+  const requestedTab = () =>
+    resolveTab(location.state?.tab) ||
+    resolveTab(new URLSearchParams(location.search).get("tab"));
+
+  // True when the sidebar's "Aptitude Test" item was clicked
+  const aptitudeView = String(
+    location.state?.tab || new URLSearchParams(location.search).get("tab") || ""
+  ).trim().toLowerCase().startsWith("aptitude");
+
+  // In-page tab clicks also update the navigation state, so the sidebar
+  // highlights the matching item.
+  const goToTab = (tab) => {
+    setActiveTab(tab);
+    navigate(location.pathname, { state: { tab }, replace: true });
+  };
+
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeTab, setActiveTab]   = useState("Companies");
+  const [activeTab, setActiveTab]   = useState(() => requestedTab() || "Companies");
   const [pdfViewer, setPdfViewer]   = useState(null);
+
+  // Sidebar items navigate here with { state: { tab } } — switch tabs even
+  // when we're already on /placement (location.key changes on every navigation).
+  useEffect(() => {
+    setActiveTab(requestedTab() || "Companies");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   // Companies form (shared between "Add" and "Edit" modes)
   const [showCompanyForm, setShowCompanyForm] = useState(false);
@@ -177,7 +233,9 @@ export default function PlacementDashboard() {
     setUploading(false);
   };
 
-  const groupedUploads = UPLOAD_CATEGORIES.reduce((acc, cat) => {
+  const groupedUploads = UPLOAD_CATEGORIES
+    .filter((cat) => !aptitudeView || APTITUDE_CATEGORIES.includes(cat))
+    .reduce((acc, cat) => {
     const items = placementUploads.filter((u) => u.category === cat);
     if (items.length > 0) acc[cat] = items;
     return acc;
@@ -203,7 +261,7 @@ export default function PlacementDashboard() {
             {TABS.map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => goToTab(tab)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer
                   ${activeTab === tab
                     ? "bg-[var(--color-accent-solid)] text-white"
@@ -539,6 +597,19 @@ export default function PlacementDashboard() {
           {/* ── RESOURCES ── */}
           {activeTab === "Resources" && (
             <div className="space-y-5">
+              {aptitudeView && (
+                <div className="flex items-center justify-between gap-3 flex-wrap bg-[var(--color-accent-soft-bg)] border border-[var(--color-border)] rounded-xl px-4 py-3">
+                  <p className="text-[var(--color-accent-soft-text)] text-sm">
+                    📝 Showing aptitude resources only (Aptitude Material and Mock Tests).
+                  </p>
+                  <button
+                    onClick={() => goToTab("Resources")}
+                    className="px-3 py-1.5 bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded-lg text-xs font-medium cursor-pointer"
+                  >
+                    Show all resources
+                  </button>
+                </div>
+              )}
               {isOfficer && (
                 <div className="flex justify-end">
                   <button
@@ -634,7 +705,7 @@ export default function PlacementDashboard() {
               {Object.keys(groupedUploads).length === 0 && (
                 <div className="text-center py-12 text-[var(--color-text-muted)]">
                   <p className="text-4xl mb-2">📭</p>
-                  <p className="text-sm">No resources uploaded yet.</p>
+                  <p className="text-sm">{aptitudeView ? "No aptitude resources uploaded yet." : "No resources uploaded yet."}</p>
                 </div>
               )}
 

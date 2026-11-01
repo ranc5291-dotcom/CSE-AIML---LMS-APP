@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth, getAllStudents } from "../context/AuthContext";
 import { useLMS } from "../context/LMSContext";
@@ -29,6 +30,14 @@ const YEARS = [
 ];
 
 const TABS = ["My Subjects", "Upload Notes", "Assignments", "Attendance", "Notice Board", "Gallery"];
+
+// The sidebar sends a tab name when an item is clicked; match it to one of
+// this page's tabs (ignoring case / spacing).
+const resolveTab = (raw) => {
+  if (!raw) return null;
+  const key = String(raw).trim().toLowerCase();
+  return TABS.find((t) => t.toLowerCase() === key) || null;
+};
 
 // All semesters available for Notice Board targeting (independent of the
 // Year/Semester selector above, which only scopes Subjects/Notes/etc.)
@@ -507,8 +516,26 @@ export default function FacultyDashboard() {
     notifyAcademicUpdate,
   } = useLMS();
 
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("My Subjects");
+  const [activeTab, setActiveTab] = useState(() => resolveTab(location.state?.tab) || "My Subjects");
+
+  // Sidebar items navigate here with { state: { tab } } — switch tabs even
+  // when we're already on /faculty (location.key changes on every navigation).
+  useEffect(() => {
+    setActiveTab(resolveTab(location.state?.tab) || "My Subjects");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
+
+  // In-page tab clicks also update the navigation state, so the sidebar
+  // highlights the matching item.
+  const goToTab = (tab) => {
+    setActiveTab(tab);
+    navigate(location.pathname, { state: { tab }, replace: true });
+  };
+
   const [selectedYear, setSelectedYear] = useState(YEARS[2]);
   const [selectedSem, setSelectedSem] = useState("Sem 5");
   const [pdfViewer, setPdfViewer] = useState(null);
@@ -998,7 +1025,7 @@ export default function FacultyDashboard() {
 
           <div className="flex gap-2 flex-wrap">
             {TABS.map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
+              <button key={tab} onClick={() => goToTab(tab)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium cursor-pointer transition-all
                   ${activeTab === tab ? "bg-[var(--color-accent-solid)] text-white" : "bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)]"}`}>
                 {tab}
@@ -1085,7 +1112,7 @@ export default function FacultyDashboard() {
                         // the faculty to the right place instead of creating
                         // a stranded, mislabeled "note".
                         if (val === "Assignment") {
-                          setActiveTab("Assignments");
+                          goToTab("Assignments");
                           return;
                         }
                         setNoteType(val);
