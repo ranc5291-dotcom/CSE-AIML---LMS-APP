@@ -5,12 +5,13 @@ import { useAuth, getAllStudents, getAllFaculty, getAllPlacement, getAllAdmins }
 import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
+import StudentRecords, { logStatusEvent } from "../components/StudentRecords";
 import {
   getAllUserRoles, getEventRegistrationSummary, getAllEventRegistrations, deleteEventRegistration,
   getStudentsByYearSem, getCatalogSubjects, getAttendanceForYearSem, saveAttendanceBulk, getMarksForYearSem,
 } from "../utils/supabase";
 
-const TABS = ["Overview", "Student Management", "Marks & Attendance", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Events", "Announcements", "Notice Board", "Gallery"];
+const TABS = ["Overview", "Student Management", "Student Records", "Marks & Attendance", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Events", "Announcements", "Notice Board", "Gallery"];
 const ALL_ROLES = ["student", "faculty", "admin", "placement"];
 const ROLE_LABELS_MAP = { student: "Student", faculty: "Faculty", admin: "Admin", placement: "Placement" };
 const SEM_SEQUENCE = [
@@ -640,6 +641,7 @@ export default function AdminDashboard() {
     const { students: list, fromYear, fromSem, toYear, toSem } = confirmBulkPromote;
     for (const s of list) {
       promoteStudent(s.id);
+      logStatusEvent({ studentId: s.id, event: "promoted", year: fromYear, sem: fromSem, remarks: `to ${toSem}`, by: user?.name });
       await addPromotion({ studentId: s.id, studentName: s.name, fromYear, fromSem, toYear, toSem });
     }
     setBulkPromoting(false);
@@ -774,6 +776,14 @@ export default function AdminDashboard() {
   const executeAction = () => {
     if (!confirmAction) return;
     const { studentId, action } = confirmAction;
+
+    // Record this change in the student's year-by-year history.
+    const histEvent = { promote: "promoted", detain: "detained", dropout: "dropout", active: "restored", transfer: "transferred" }[action];
+    if (histEvent) {
+      const stu = students.find((s) => s.id === studentId);
+      logStatusEvent({ studentId, event: histEvent, year: stu?.year, sem: stu?.sem, by: user?.name });
+    }
+
     switch (action) {
       case "promote": {
         // Capture current position BEFORE promoting so we know what to notify
@@ -1315,6 +1325,11 @@ export default function AdminDashboard() {
                 })}
               </div>
             </div>
+          )}
+
+          {/* ── STUDENT RECORDS (batch wise) ── */}
+          {activeTab === "Student Records" && (
+            <StudentRecords adminName={user?.name} />
           )}
 
           {/* ── MARKS & ATTENDANCE ── */}

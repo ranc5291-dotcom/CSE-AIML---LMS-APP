@@ -7,6 +7,7 @@ import { downloadFile } from "../utils/download";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import PDFViewer from "../components/PDFViewer";
+import { BacklogManager } from "../components/StudentRecords";
 
 const YEARS = [
   { label: "1st Year", sems: ["Sem 1", "Sem 2"] },
@@ -17,7 +18,7 @@ const YEARS = [
 
 const ALL_SEMS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"];
 
-const DASHBOARD_TABS = ["Overview", "Notes & Subjects", "Placement", "Marks", "Attendance"];
+const DASHBOARD_TABS = ["Overview", "Notes & Subjects", "Placement", "Marks", "Attendance", "Backlogs"];
 
 function getYearForSem(semLabel) {
   const found = YEARS.find((y) => y.sems.includes(semLabel));
@@ -1028,6 +1029,13 @@ export default function StudentDashboard() {
           {activeTab === "Attendance" && (
             !hasSemester ? <RegistrationIncomplete /> :
             <MyAttendancePanel sem={currentSem} userId={user?.id} />
+          )}
+
+          {activeTab === "Backlogs" && (
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
+              <h3 className="text-[var(--color-text-primary)] font-semibold">📌 My Backlogs</h3>
+              <BacklogManager studentId={user?.id} role="student" actorName={user?.name} />
+            </div>
           )}
 
         </main>
