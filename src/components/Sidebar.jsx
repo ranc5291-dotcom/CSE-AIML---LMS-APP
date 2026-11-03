@@ -7,7 +7,7 @@ const NAV_ITEMS = {
     { icon: "🏠", label: "Dashboard",   path: "/student" },
     { icon: "📚", label: "Subjects",    path: "/student", tab: "Notes & Subjects" },
     { icon: "🗓️", label: "Timetable",   path: "/timetable" },
-    { icon: "📄", label: "Notes & PYQ", path: "/student", tab: "Notes & Subjects" },
+    { icon: "📄", label: "Notes & PYQ", path: "/student", tab: "Notes & PYQ" },
     { icon: "📅", label: "Attendance",  path: "/student", tab: "Attendance" },
     { icon: "🏆", label: "My Marks",    path: "/student", tab: "Marks" },
     { icon: "📣", label: "Events",      path: "/events" },
