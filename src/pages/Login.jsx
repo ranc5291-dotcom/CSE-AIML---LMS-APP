@@ -220,6 +220,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
     name: "", usn: "", email: "", phone: "",
     password: "", confirmPassword: "",
     branch: "CSEAIML", startYear: String(CURRENT_YEAR - 1),
+    endYear: String(CURRENT_YEAR - 1 + 4),
     year: "1st Year", sem: "Sem 1",
   });
   const [emailVerified, setEmailVerified] = useState(false);
@@ -231,6 +232,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
   const set = (key) => (e) => {
     const val = e.target.value;
     if (key === "year") setForm((p) => ({ ...p, year: val, sem: SEM_MAP[val][0] }));
+    else if (key === "startYear") setForm((p) => ({ ...p, startYear: val, endYear: String(Number(val) + 4) }));
     else setForm((p) => ({ ...p, [key]: val }));
     if (key === "email" && val !== verifiedEmail) setEmailVerified(false);
   };
@@ -240,7 +242,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
     setVerifiedEmail(form.email);
   };
 
-  const endYear = String(Number(form.startYear) + 4);
+  const endYear = form.endYear;
 
   const handleSubmit = async () => {
     setError("");
@@ -255,6 +257,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
     if (!form.password)    { setError("Password is required."); return; }
     if (form.password !== form.confirmPassword) { setError("Passwords do not match."); return; }
     if (form.password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (Number(form.endYear) <= Number(form.startYear)) { setError("Admission end year must be after start year."); return; }
 
     setLoading(true);
     try {
@@ -268,7 +271,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
         year:     form.year,
         sem:      form.sem,
         startYear: form.startYear,
-        endYear:  String(Number(form.startYear) + 4),
+        endYear:  form.endYear,
         role:     "student",
         status:   "active",
       });
@@ -311,15 +314,25 @@ function StudentRegisterForm({ onBack, onSuccess }) {
 
       <EmailVerifyBlock email={form.email} verified={emailVerified} onVerified={handleEmailVerified} />
 
+      <Field label="Branch" value={form.branch} onChange={set("branch")} placeholder="CSEAIML" required />
+
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Branch" value={form.branch} onChange={set("branch")} placeholder="CSEAIML" required />
         <div>
           <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
-            Admission Year <span className="text-red-400">*</span>
+            Admission Start Year <span className="text-red-400">*</span>
           </label>
           <select value={form.startYear} onChange={set("startYear")}
             className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none text-sm cursor-pointer">
             {[0,1,2,3,4].map((o) => { const y = String(CURRENT_YEAR-o); return <option key={y} value={y}>{y}</option>; })}
+          </select>
+        </div>
+        <div>
+          <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
+            Admission End Year <span className="text-red-400">*</span>
+          </label>
+          <select value={form.endYear} onChange={set("endYear")}
+            className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none text-sm cursor-pointer">
+            {[3,4,5].map((o) => { const y = String(Number(form.startYear)+o); return <option key={y} value={y}>{y}</option>; })}
           </select>
         </div>
       </div>
