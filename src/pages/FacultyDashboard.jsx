@@ -29,7 +29,7 @@ const YEARS = [
   { label: "4th Year", sems: ["Sem 7", "Sem 8"] },
 ];
 
-const TABS = ["My Subjects", "Upload Notes", "Assignments", "Attendance", "Notice Board", "Gallery"];
+const TABS = ["My Subjects", "Upload Notes", "Assignments", "Attendance", "Notice Board"];
 
 // The sidebar sends a tab name when an item is clicked; match it to one of
 // this page's tabs (ignoring case / spacing).
