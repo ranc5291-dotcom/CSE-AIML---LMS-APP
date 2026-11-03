@@ -20,6 +20,16 @@ const ALL_SEMS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7",
 
 const DASHBOARD_TABS = ["Overview", "Notes & Subjects", "Placement", "Marks", "Attendance", "Backlogs"];
 
+// The sidebar sends a tab name when an item is clicked; match it to one of
+// this page's tabs. "Notes & PYQ" is its own sidebar item but lives on the
+// Notes & Subjects tab.
+const resolveTab = (raw) => {
+  if (!raw) return null;
+  const key = String(raw).trim().toLowerCase();
+  if (key === "notes & pyq") return "Notes & Subjects";
+  return DASHBOARD_TABS.find((t) => t.toLowerCase() === key) || null;
+};
+
 function getYearForSem(semLabel) {
   const found = YEARS.find((y) => y.sems.includes(semLabel));
   return found ? found.label : null;
@@ -463,10 +473,24 @@ export default function StudentDashboard() {
   } = useLMS();
 
   const [mobileOpen, setMobileOpen]     = useState(false);
-  const [activeTab, setActiveTab]       = useState(location.state?.tab || "Overview");
+  const [activeTab, setActiveTab]       = useState(() => resolveTab(location.state?.tab) || "Overview");
   const [pdfViewer, setPdfViewer]       = useState(null);
   const [subjectPopup, setSubjectPopup] = useState(null);
   const [activePromo, setActivePromo]   = useState(null);
+
+  // Sidebar items navigate here with { state: { tab } } — switch tabs even
+  // when we're already on /student (location.key changes on every navigation).
+  useEffect(() => {
+    setActiveTab(resolveTab(location.state?.tab) || "Overview");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
+
+  // In-page tab changes also update the navigation state, so the sidebar
+  // highlights the matching item.
+  const goToTab = (tab) => {
+    setActiveTab(tab);
+    navigate(location.pathname, { state: { tab }, replace: true });
+  };
 
   const [catalogSubjects, setCatalogSubjects] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -582,8 +606,8 @@ export default function StudentDashboard() {
   };
 
   const STATS = [
-    { label: "Assignments", value: myAssignments.length, color: "from-amber-500 to-orange-500", onClick: () => setActiveTab("Notes & Subjects") },
-    { label: "Open Drives", value: openCompanies.length, color: "from-rose-500 to-pink-500",    onClick: () => setActiveTab("Placement") },
+    { label: "Assignments", value: myAssignments.length, color: "from-amber-500 to-orange-500", onClick: () => goToTab("Notes & Subjects") },
+    { label: "Open Drives", value: openCompanies.length, color: "from-rose-500 to-pink-500",    onClick: () => goToTab("Placement") },
     { label: "Timetable",   value: null,                 color: "from-blue-500 to-cyan-500",     onClick: () => navigate("/timetable") },
   ];
 
@@ -652,7 +676,7 @@ export default function StudentDashboard() {
                 ? "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-accent-solid)] text-white"
                 : "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]";
               return (
-                <button key={tab} onClick={() => setActiveTab(tab)} className={tabClass}>
+                <button key={tab} onClick={() => goToTab(tab)} className={tabClass}>
                   {tab}
                 </button>
               );
@@ -782,7 +806,7 @@ export default function StudentDashboard() {
                 <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-[var(--color-text-primary)] font-semibold">Open Placement Drives</h3>
-                    <button onClick={() => setActiveTab("Placement")} className="text-amber-400 text-xs hover:text-amber-300 cursor-pointer">View All</button>
+                    <button onClick={() => goToTab("Placement")} className="text-amber-400 text-xs hover:text-amber-300 cursor-pointer">View All</button>
                   </div>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     {openCompanies.slice(0, 4).map((c) => (
