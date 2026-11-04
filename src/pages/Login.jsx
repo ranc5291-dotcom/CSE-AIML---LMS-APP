@@ -270,6 +270,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
     if (!form.email.trim()) { setError("Email is required."); return; }
     if (!isEmail(form.email)) { setError("Please enter a valid email address."); return; }
     if (!emailVerified) { setError("Please verify your email with OTP before registering."); return; }
+    if (isLateral && !form.phone.trim()) { setError("Phone number is required for lateral entry students."); return; }
     if (form.phone.trim() && !isPhone(form.phone)) { setError("Please enter a valid phone number."); return; }
     if (!form.password)    { setError("Password is required."); return; }
     if (form.password !== form.confirmPassword) { setError("Passwords do not match."); return; }
@@ -359,9 +360,9 @@ function StudentRegisterForm({ onBack, onSuccess }) {
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Email" type="email" value={form.email} onChange={set("email")} placeholder="name@gmail.com" required disabled={emailVerified} />
-        <Field label="Phone (optional)" type="tel" value={form.phone} onChange={set("phone")} placeholder="+91 9876543210" />
+        <Field label={isLateral ? "Phone" : "Phone (optional)"} type="tel" value={form.phone} onChange={set("phone")} placeholder="+91 9876543210" required={isLateral} />
       </div>
-      <p className="text-[var(--color-text-muted)] text-xs -mt-2">* Email is required and must be verified via OTP. Phone is optional.</p>
+      <p className="text-[var(--color-text-muted)] text-xs -mt-2">{isLateral ? "* Email (verified via OTP) and phone number are both required for lateral entry students." : "* Email is required and must be verified via OTP. Phone is optional."}</p>
 
       <EmailVerifyBlock email={form.email} verified={emailVerified} onVerified={handleEmailVerified} />
 
