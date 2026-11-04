@@ -46,6 +46,11 @@ const SEM_OPTIONS = ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 
 // year on the Events tab, since event_registrations only stores semester).
 const SEM_TO_YEAR_MAP = Object.fromEntries(SEM_SEQUENCE.map(({ year, sem }) => [sem, year]));
 
+// Lateral entry students join directly in 2nd year. The entry type is saved on
+// the profile at registration (entry_type = "lateral"); older students have none
+// and count as regular.
+const isLateralStudent = (s) => (s?.entryType || s?.entry_type) === "lateral";
+
 // ══════════════════════════════════════════════════════════
 // MARKS & ATTENDANCE (Admin)
 //  - Attendance: editable (saved via saveAttendanceBulk, same path faculty uses)
@@ -565,6 +570,7 @@ export default function AdminDashboard() {
   const [filterYear, setFilterYear]       = useState("All");
   const [filterSem, setFilterSem]         = useState("All");
   const [filterStatus, setFilterStatus]   = useState("All");
+  const [filterEntry, setFilterEntry]     = useState("All");
   const [confirmAction, setConfirmAction] = useState(null);
   const [userRolesMap, setUserRolesMap] = useState({});
   const [pendingRoles, setPendingRoles] = useState({});
@@ -722,7 +728,9 @@ export default function AdminDashboard() {
     const matchYear   = filterYear   === "All" || s.year   === filterYear;
     const matchSem    = filterSem    === "All" || s.sem    === filterSem;
     const matchStatus = filterStatus === "All" || (s.status || "active") === filterStatus;
-    return matchSearch && matchYear && matchSem && matchStatus;
+    const matchEntry  = filterEntry  === "All" ||
+      (filterEntry === "lateral" ? isLateralStudent(s) : !isLateralStudent(s));
+    return matchSearch && matchYear && matchSem && matchStatus && matchEntry;
   });
 
   const sortedStudents = [...filteredStudents].sort((a, b) => {
@@ -743,6 +751,20 @@ export default function AdminDashboard() {
   const dropoutStudents  = students.filter((s) => s.status === "dropout").length;
   const detainedStudents = students.filter((s) => s.status === "detained").length;
   const openComplaints   = complaints.filter((c) => c.status === "Pending").length;
+
+  // Lateral entry students (overview counts + Student Management shortcut)
+  const lateralStudents   = students.filter(isLateralStudent);
+  const lateralUsnPending = lateralStudents.filter((s) => !s.usn).length;
+
+  // Jump to Student Management filtered to lateral students (optionally one semester)
+  const openLateralStudents = (year = "All", sem = "All") => {
+    setSearchStudent("");
+    setFilterEntry("lateral");
+    setFilterStatus("All");
+    setFilterYear(year);
+    setFilterSem(sem);
+    setActiveTab("Student Management");
+  };
 
   // Events tab — derived filter options + filtered rows
   const eventCategories = Array.from(
@@ -1103,6 +1125,37 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/* Lateral entry students per sem */}
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+                  <h3 className="text-[var(--color-text-primary)] font-semibold">🎓 Lateral Entry Students per Semester</h3>
+                  <button onClick={() => openLateralStudents()}
+                    className="px-3 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-lg text-xs font-medium cursor-pointer transition-all">
+                    View all lateral students →
+                  </button>
+                </div>
+                <p className="text-[var(--color-text-muted)] text-xs mb-4">
+                  Total: <span className="text-[var(--color-text-primary)] font-medium">{lateralStudents.length}</span>
+                  {" · "}USN pending: <span className="text-amber-400 font-medium">{lateralUsnPending}</span>
+                  {" · "}Tap a semester to see those students.
+                </p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {SEM_SEQUENCE.map(({ year, sem }) => {
+                    const count = lateralStudents.filter((s) => s.sem === sem && s.year === year).length;
+                    return (
+                      <button key={sem} onClick={() => openLateralStudents(year, sem)}
+                        className="bg-[var(--color-bg-surface-alt)] hover:opacity-80 rounded-xl p-3 flex items-center justify-between text-left cursor-pointer transition-all">
+                        <div>
+                          <p className="text-[var(--color-text-secondary)] text-xs font-medium">{sem}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs">{year}</p>
+                        </div>
+                        <span className="text-[var(--color-text-primary)] font-bold text-lg">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Event joins by semester */}
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5">
                 <h3 className="text-[var(--color-text-primary)] font-semibold mb-4">🎉 Event Joins by Semester</h3>
@@ -1213,6 +1266,12 @@ export default function AdminDashboard() {
                     <option value="dropout">Dropout</option>
                     <option value="transferred">Transferred</option>
                   </select>
+                  <select value={filterEntry} onChange={(e) => setFilterEntry(e.target.value)}
+                    className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer">
+                    <option value="All">All Entry Types</option>
+                    <option value="regular">Regular</option>
+                    <option value="lateral">Lateral Entry</option>
+                  </select>
                   <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)}
                     className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer">
                     <option value="All">All Years</option>
@@ -1270,9 +1329,14 @@ export default function AdminDashboard() {
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[status] || STATUS_COLORS.active}`}>
                               {STATUS_LABELS[status] || "Active"}
                             </span>
+                            {isLateralStudent(s) && (
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-cyan-500/20 text-cyan-400">
+                                Lateral Entry
+                              </span>
+                            )}
                           </div>
                           <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)]">
-                            <span>🪪 {s.usn || s.id}</span>
+                            <span>🪪 {s.usn || (isLateralStudent(s) ? "USN pending" : s.id)}</span>
                             <span>📚 {s.year} · {s.sem}</span>
                             <span>🏛️ {s.branch || "CSEAIML"}</span>
                             {s.email && <span>📧 {s.email}</span>}
