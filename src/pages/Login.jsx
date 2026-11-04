@@ -14,6 +14,8 @@ const ROLE_CONFIG = {
 };
 
 const YEAR_OPTIONS = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+// Lateral entry students join directly in 2nd year (Sem 3)
+const LATERAL_YEAR_OPTIONS = ["2nd Year", "3rd Year", "4th Year"];
 const SEM_MAP = {
   "1st Year": ["Sem 1", "Sem 2"], "2nd Year": ["Sem 3", "Sem 4"],
   "3rd Year": ["Sem 5", "Sem 6"], "4th Year": ["Sem 7", "Sem 8"],
@@ -222,6 +224,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
     branch: "CSEAIML", startYear: String(CURRENT_YEAR - 1),
     endYear: String(CURRENT_YEAR - 1 + 4),
     year: "1st Year", sem: "Sem 1",
+    entryType: "regular",
   });
   const [emailVerified, setEmailVerified] = useState(false);
   const [verifiedEmail, setVerifiedEmail] = useState("");
@@ -229,12 +232,26 @@ function StudentRegisterForm({ onBack, onSuccess }) {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const isLateral = form.entryType === "lateral";
+  const yearOptions = isLateral ? LATERAL_YEAR_OPTIONS : YEAR_OPTIONS;
+  // Regular: 4-year course. Lateral: 3-year course (joins in 2nd year).
+  const endYearOffsets = isLateral ? [2, 3, 4] : [3, 4, 5];
+
   const set = (key) => (e) => {
     const val = e.target.value;
     if (key === "year") setForm((p) => ({ ...p, year: val, sem: SEM_MAP[val][0] }));
-    else if (key === "startYear") setForm((p) => ({ ...p, startYear: val, endYear: String(Number(val) + 4) }));
+    else if (key === "startYear") setForm((p) => ({ ...p, startYear: val, endYear: String(Number(val) + (p.entryType === "lateral" ? 3 : 4)) }));
     else setForm((p) => ({ ...p, [key]: val }));
     if (key === "email" && val !== verifiedEmail) setEmailVerified(false);
+  };
+
+  const handleEntryType = (type) => {
+    setError("");
+    setForm((p) =>
+      type === "lateral"
+        ? { ...p, entryType: "lateral", year: "2nd Year", sem: "Sem 3", endYear: String(Number(p.startYear) + 3) }
+        : { ...p, entryType: "regular", year: "1st Year", sem: "Sem 1", endYear: String(Number(p.startYear) + 4) }
+    );
   };
 
   const handleEmailVerified = (ok) => {
@@ -249,7 +266,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
     setSuccess("");
 
     if (!form.name.trim()) { setError("Full name is required."); return; }
-    if (!form.usn.trim())  { setError("USN is required."); return; }
+    if (!isLateral && !form.usn.trim()) { setError("USN is required."); return; }
     if (!form.email.trim()) { setError("Email is required."); return; }
     if (!isEmail(form.email)) { setError("Please enter a valid email address."); return; }
     if (!emailVerified) { setError("Please verify your email with OTP before registering."); return; }
@@ -262,7 +279,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
     setLoading(true);
     try {
       const result = await registerUser({
-        usn:      form.usn.toUpperCase(),
+        usn:      form.usn.trim() ? form.usn.trim().toUpperCase() : null,
         name:     form.name.trim(),
         email:    form.email.trim(),
         phone:    form.phone.trim() ? normalizePhone(form.phone) : null,
@@ -272,6 +289,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
         sem:      form.sem,
         startYear: form.startYear,
         endYear:  form.endYear,
+        entryType: form.entryType,
         role:     "student",
         status:   "active",
       });
@@ -302,9 +320,42 @@ function StudentRegisterForm({ onBack, onSuccess }) {
       {success && <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-green-400 text-sm">{success}</div>}
       {error   && <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>}
 
+      <div>
+        <label className="text-[var(--color-text-secondary)] text-xs font-medium uppercase tracking-wider mb-1.5 block">
+          Entry Type <span className="text-red-400">*</span>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { value: "regular", label: "Regular", hint: "I have a USN" },
+            { value: "lateral", label: "Lateral Entry", hint: "No USN yet" },
+          ].map((opt) => (
+            <button key={opt.value} type="button" onClick={() => handleEntryType(opt.value)}
+              className={`py-2.5 px-3 rounded-xl border text-left cursor-pointer transition-all ${
+                form.entryType === opt.value
+                  ? "border-blue-500 bg-blue-500/10"
+                  : "border-[var(--color-border)] bg-[var(--color-bg-surface-alt)] hover:border-[var(--color-text-muted)]"
+              }`}>
+              <span className="block text-[var(--color-text-primary)] text-sm font-medium">{opt.label}</span>
+              <span className="block text-[var(--color-text-muted)] text-xs">{opt.hint}</span>
+            </button>
+          ))}
+        </div>
+        {isLateral && (
+          <p className="text-[var(--color-text-muted)] text-xs mt-1.5">
+            Lateral entry students join in 2nd year. You can add your USN later from Settings once the college issues it.
+          </p>
+        )}
+      </div>
+
       <Field label="Full Name" value={form.name} onChange={set("name")} placeholder="e.g. Ravi Kumar" required />
 
-      <Field label="USN (University Seat Number)" value={form.usn} onChange={set("usn")} placeholder="e.g. 1MS22AI045" required />
+      <Field
+        label={isLateral ? "USN (optional)" : "USN (University Seat Number)"}
+        value={form.usn}
+        onChange={set("usn")}
+        placeholder={isLateral ? "Leave empty if not issued yet" : "e.g. 1MS22AI045"}
+        required={!isLateral}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Email" type="email" value={form.email} onChange={set("email")} placeholder="name@gmail.com" required disabled={emailVerified} />
@@ -332,7 +383,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
           </label>
           <select value={form.endYear} onChange={set("endYear")}
             className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none text-sm cursor-pointer">
-            {[3,4,5].map((o) => { const y = String(Number(form.startYear)+o); return <option key={y} value={y}>{y}</option>; })}
+            {endYearOffsets.map((o) => { const y = String(Number(form.startYear)+o); return <option key={y} value={y}>{y}</option>; })}
           </select>
         </div>
       </div>
@@ -344,7 +395,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
           </label>
           <select value={form.year} onChange={set("year")}
             className="w-full bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] focus:outline-none text-sm cursor-pointer">
-            {YEAR_OPTIONS.map((y) => <option key={y}>{y}</option>)}
+            {yearOptions.map((y) => <option key={y}>{y}</option>)}
           </select>
         </div>
         <div>
@@ -359,7 +410,7 @@ function StudentRegisterForm({ onBack, onSuccess }) {
       </div>
 
       <div className="bg-[var(--color-bg-surface-alt)]/50 rounded-xl p-2.5 text-xs text-[var(--color-text-secondary)] border border-[var(--color-border)]">
-        📌 USN <span className="text-[var(--color-text-primary)] font-medium">{form.usn || "—"}</span> · Sign in with <span className="text-[var(--color-text-primary)] font-medium">{form.email || "your email"}</span> · Batch: <span className="text-blue-400">{form.startYear}–{endYear}</span>
+        📌 USN <span className="text-[var(--color-text-primary)] font-medium">{form.usn || (isLateral ? "Pending" : "—")}</span> · Sign in with <span className="text-[var(--color-text-primary)] font-medium">{form.email || "your email"}</span> · Batch: <span className="text-blue-400">{form.startYear}–{endYear}</span>{isLateral && <> · <span className="text-amber-400">Lateral Entry</span></>}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
