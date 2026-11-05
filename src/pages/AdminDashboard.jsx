@@ -16,6 +16,7 @@ import {
   parseAttendanceFile, suggestSubjectMappings, buildStudentIndex, findStudent,
   buildAttendanceTemplate, labelKey,
 } from "../utils/attendanceImport";
+import { sendNotification } from "../utils/api";
 
 const TABS = ["Overview", "Student Management", "Student Records", "Marks & Attendance", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Events", "Announcements", "Notice Board", "Gallery"];
 const ALL_ROLES = ["student", "faculty", "admin", "placement"];
@@ -352,12 +353,45 @@ function MarksAttendancePanel({ adminId }) {
     setConfirmRows(rows);
   };
 
+  // Tells each student whose attendance changed (push notification to their phone).
+  // Students with the same subject list share one request, so a bulk upload sends only a few.
+  const notifyAttendanceUpdated = (rows) => {
+    try {
+      const perStudent = new Map();
+      rows.forEach((r) => {
+        const sub = subjects.find((x) => String(x.id) === String(r.subjectId));
+        const label = sub ? (sub.subject_code || sub.subject_name) : null;
+        if (!label) return;
+        if (!perStudent.has(r.studentId)) perStudent.set(r.studentId, new Set());
+        perStudent.get(r.studentId).add(label);
+      });
+      const groups = new Map();
+      perStudent.forEach((set, studentId) => {
+        const labels = [...set].sort();
+        const key = labels.join("|");
+        if (!groups.has(key)) groups.set(key, { labels, ids: [] });
+        groups.get(key).ids.push(studentId);
+      });
+      groups.forEach(({ labels, ids }) => {
+        sendNotification({
+          title: "Attendance updated",
+          body: "Your attendance was updated for " + labels.join(", ") + " (" + sem + "). Open the app to see it.",
+          url: "/student",
+          userIds: ids,
+        }).catch((err) => console.warn("Attendance notification failed:", err?.message || err));
+      });
+    } catch (err) {
+      console.warn("Attendance notification failed:", err?.message || err);
+    }
+  };
+
   const executeSave = async () => {
     if (!confirmRows) return;
     setSaving(true);
     const result = await saveAttendanceBulk(confirmRows, adminId);
     setSaving(false);
     if (result.ok) {
+      notifyAttendanceUpdated(confirmRows);
       setMsg({ type: "ok", text: `✅ Saved attendance for ${result.count} entr${result.count === 1 ? "y" : "ies"}.` });
       setConfirmRows(null);
       setReloadKey((k) => k + 1);
