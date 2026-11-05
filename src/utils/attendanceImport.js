@@ -172,12 +172,19 @@ export function parseAttendancePdfItems(pages) {
     students.forEach((s) => {
       if (c.label in s.values) rows.push({ usn: s.usn, name: s.name, attended: s.values[c.label], total: c.total });
     });
-    if (rows.length === 0 && c.total === null) return;
+    const missing = students
+      .filter((s) => !(c.label in s.values))
+      .map((s) => ({ usn: s.usn, name: s.name }));
     sources.push({
       label: c.label,
       total: c.total,
       rows,
-      note: rows.length === 0 ? "Classes held is filled in, but no attended values found" : undefined,
+      missing,
+      note: rows.length === 0
+        ? (c.total !== null
+            ? "Classes held is filled in, but no attendance was entered for any student"
+            : "No attendance in this file for this subject")
+        : undefined,
     });
   });
 
@@ -231,6 +238,7 @@ export function parseAttendanceWorkbook(XLSX, wb) {
     const rows = [];
     const allTotals = [];
     let blank = 0;
+    const missing = [];
     recs.forEach((r) => {
       const usn = String(r.usn ?? "").trim();
       const name = String(pick(r, ["name", "student name", "students name"]) ?? "").trim();
@@ -238,7 +246,7 @@ export function parseAttendanceWorkbook(XLSX, wb) {
       const attended = toIntOrNull(pick(r, ["attended", "present", "classes attended", "attended classes"]));
       const total = toIntOrNull(pick(r, ["total", "total classes", "classes held", "held"]));
       if (total !== null && !Number.isNaN(total)) allTotals.push(total);
-      if (attended === null) { blank++; return; }
+      if (attended === null) { blank++; missing.push({ usn, name }); return; }
       rows.push({ usn, name, attended, total });
     });
 
@@ -251,7 +259,7 @@ export function parseAttendanceWorkbook(XLSX, wb) {
         ? "Total classes is filled in, but no attended values found"
         : "Sheet is empty";
     }
-    sources.push({ label: String(sheetName).trim(), total: sheetTotal, rows, note, blank });
+    sources.push({ label: String(sheetName).trim(), total: sheetTotal, rows, note, blank, missing });
   });
 
   if (!sources.length) {
@@ -285,6 +293,7 @@ function scoreLabel(label, subject, saved) {
   if (saved && String(saved) === String(subject.id)) return 100;
   if (l === normLabel(subject.subject_code)) return 100;
   if (l === normLabel(subject.subject_name)) return 100;
+  if ((l === "OOP" || l === "OOPS") && String(subject.subject_name ?? "").toUpperCase().startsWith("OBJECT ORIENTED")) return 90;
 
   const words = significantWords(subject.subject_name);
   const initials = words.map((w) => w[0]).join("");
@@ -359,6 +368,26 @@ export function findStudent(row, idx) {
       return [...small].every((t) => big.has(t));
     });
     if (cands.length === 1) return cands[0];
+  }
+
+  // Same first name; the other parts are equal or just initials of each other
+  // e.g. "VISHWA NOOLESH MUTAGI" and "Vishwa N M". Only accepted if exactly one student fits.
+  const parts = n.split(" ").filter(Boolean);
+  if (parts.length >= 2) {
+    const compat = (a, b) => a === b || (a.length === 1 && b.startsWith(a)) || (b.length === 1 && a.startsWith(b));
+    const initialMatches = idx.list.filter((st) => {
+      const sp = normName(st.name).split(" ").filter(Boolean);
+      if (sp.length < 2 || sp[0] !== parts[0]) return false;
+      const [short, long] = sp.length <= parts.length ? [sp, parts] : [parts, sp];
+      const used = new Set();
+      return short.slice(1).every((t) => {
+        const k = long.findIndex((u, i) => i > 0 && !used.has(i) && compat(t, u));
+        if (k < 0) return false;
+        used.add(k);
+        return true;
+      });
+    });
+    if (initialMatches.length === 1) return initialMatches[0];
   }
   return null;
 }
