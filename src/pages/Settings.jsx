@@ -65,12 +65,16 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
   // Student-only: correct USN and batch years entered by mistake at registration
   const isStudent = user?.role === "student";
   const curStart  = String(user?.admission_year || user?.start_year || "");
-  const curEnd    = String(user?.end_year || (curStart ? Number(curStart) + 4 : ""));
+  const curEnd    = String(user?.end_year || (curStart ? Number(curStart) + (user?.entry_type === "lateral" ? 3 : 4) : ""));
   const [usn, setUsn]             = useState(user?.usn || "");
   const [startYear, setStartYear] = useState(curStart);
   const [endYear, setEndYear]     = useState(curEnd);
   const [acadMsg, setAcadMsg]     = useState(null);
   const [acadSaving, setAcadSaving] = useState(false);
+  const savedEntryType = user?.entry_type === "lateral" ? "lateral" : "regular";
+  const [entryType, setEntryType] = useState(savedEntryType);
+  const isLateral = entryType === "lateral";   // what is selected right now
+  const batchSpan = isLateral ? 3 : 4;         // lateral entry = 3-year batch
 
   const hasPasswordLogin = !!user?.uid;
 
@@ -91,10 +95,19 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
 
   const handleStartYearChange = (e) => {
     const val = e.target.value.replace(/\D/g, "").slice(0, 4);
-    // keep the end year in step (start + 4) unless the student set it to something else
-    const followsStart = endYear === "" || endYear === String(Number(startYear) + 4);
+    // keep the end year in step (start + batch length) unless the student set it to something else
+    const followsStart = endYear === "" || endYear === String(Number(startYear) + batchSpan);
     setStartYear(val);
-    if (followsStart) setEndYear(val.length === 4 ? String(Number(val) + 4) : "");
+    if (followsStart) setEndYear(val.length === 4 ? String(Number(val) + batchSpan) : "");
+  };
+
+  const handleEntryTypeChange = (type) => {
+    const newSpan = type === "lateral" ? 3 : 4;
+    // keep the end year in step with the new course length, unless the student set it to something else
+    if (/^\d{4}$/.test(startYear) && (endYear === "" || endYear === String(Number(startYear) + batchSpan))) {
+      setEndYear(String(Number(startYear) + newSpan));
+    }
+    setEntryType(type);
   };
 
   const handleSaveAcademic = async () => {
@@ -103,7 +116,7 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
     const s = Number(startYear);
     const e = Number(endYear);
 
-    if (!newUsn) { setAcadMsg({ type: "error", text: "USN cannot be empty." }); return; }
+    if (!newUsn && !isLateral) { setAcadMsg({ type: "error", text: "USN cannot be empty." }); return; }
     if (newUsn.length > 20) { setAcadMsg({ type: "error", text: "USN is too long." }); return; }
     if (!/^\d{4}$/.test(startYear) || !/^\d{4}$/.test(endYear)) {
       setAcadMsg({ type: "error", text: "Enter the start and end year as 4 digits, e.g. 2023 and 2027." });
@@ -123,18 +136,19 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
     if (newUsn !== oldUsn) changes.push({ field: "usn", label: "USN", oldV: oldUsn, newV: newUsn });
     if (startYear !== curStart) changes.push({ field: "admission_year", label: "Admission year", oldV: curStart, newV: startYear });
     if (endYear !== curEnd) changes.push({ field: "end_year", label: "End year", oldV: curEnd, newV: endYear });
+    if (entryType !== savedEntryType) changes.push({ field: "entry_type", label: "Entry type", oldV: savedEntryType, newV: entryType });
 
     if (changes.length === 0) {
       setAcadMsg({ type: "error", text: "Nothing to change — these are already your saved details." });
       return;
     }
 
-    const summary = changes.map((c) => `${c.label}: ${c.oldV || "—"}  →  ${c.newV}`).join("\n");
+    const summary = changes.map((c) => `${c.label}: ${c.oldV || "—"}  →  ${c.newV || "—"}`).join("\n");
     if (!window.confirm(`Save these changes?\n\n${summary}\n\nThe admin can see this change.`)) return;
 
     setAcadSaving(true);
     try {
-      if (newUsn !== oldUsn) {
+      if (newUsn && newUsn !== oldUsn) {
         const { data: clash, error: clashErr } = await supabase
           .from("profiles").select("id").eq("usn", newUsn).neq("id", user.id).limit(1);
         if (clashErr) throw clashErr;
@@ -146,7 +160,8 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
       }
 
       const result = await updateUserProfile(user.id, {
-        usn: newUsn,
+        usn: newUsn || null,
+        entry_type: entryType,
         admission_year: s,
         start_year: startYear,
         end_year: endYear,
@@ -158,11 +173,11 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
         changes.map((c) => ({
           student_id: user.id,
           student_name: user.name || null,
-          student_usn: newUsn,
+          student_usn: newUsn || null,
           student_email: user.email || null,
           field: c.field,
           old_value: c.oldV || null,
-          new_value: c.newV,
+          new_value: c.newV || "—",
           changed_by: user.id,
           changed_by_name: user.name || null,
           changed_by_role: user.role || "student",
@@ -173,7 +188,7 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
       setUsn(newUsn);
       setAcadMsg({
         type: "success",
-        text: newUsn !== oldUsn
+        text: newUsn && newUsn !== oldUsn
           ? "Saved. Your admin can see this change. Use your new USN the next time you sign in."
           : "Saved. Your admin can see this change.",
       });
@@ -234,12 +249,37 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
           <div>
             <h3 className="text-[var(--color-text-primary)] font-semibold">🎓 Academic Details</h3>
             <p className="text-[var(--color-text-muted)] text-xs mt-1">
-              Entered something wrong while registering? Correct your USN and batch years here.
+              Entered something wrong while registering? Correct your entry type, USN and batch years here.
               Every change is recorded and visible to the admin.
             </p>
           </div>
 
-          <Field label="USN" value={usn} onChange={(e) => setUsn(e.target.value.toUpperCase())} placeholder="e.g. 1MS22AI045" />
+          <div>
+            <label className="text-[var(--color-text-muted)] text-xs font-medium uppercase tracking-wider mb-1.5 block">Entry type</label>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: "regular", label: "Regular", hint: "Joined in 1st year" },
+                { value: "lateral", label: "Lateral Entry", hint: "Joined directly in 2nd year" },
+              ].map((opt) => (
+                <button key={opt.value} type="button" onClick={() => handleEntryTypeChange(opt.value)}
+                  className={`py-2.5 px-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    entryType === opt.value
+                      ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-surface-alt)]"
+                  }`}>
+                  <span className="block text-[var(--color-text-primary)] text-sm font-medium">{opt.label}</span>
+                  <span className="block text-[var(--color-text-muted)] text-xs">{opt.hint}</span>
+                </button>
+              ))}
+            </div>
+            {isLateral && (
+              <p className="text-[var(--color-text-muted)] text-xs mt-1.5">
+                Lateral entry batches are 3 years long. You can leave the USN empty until the college issues it.
+              </p>
+            )}
+          </div>
+
+          <Field label={isLateral ? "USN (optional)" : "USN"} value={usn} onChange={(e) => setUsn(e.target.value.toUpperCase())} placeholder={isLateral ? "Leave empty if not issued yet" : "e.g. 1MS22AI045"} />
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Batch starts (admission year)" value={startYear} onChange={handleStartYearChange} placeholder="e.g. 2023" />
@@ -327,6 +367,12 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
             <div>
               <p className="text-[var(--color-text-muted)] text-xs uppercase tracking-wider mb-1">Batch</p>
               <p className="text-[var(--color-text-primary)]">{curStart} – {curEnd}</p>
+            </div>
+          )}
+          {isStudent && (
+            <div>
+              <p className="text-[var(--color-text-muted)] text-xs uppercase tracking-wider mb-1">Entry type</p>
+              <p className="text-[var(--color-text-primary)]">{savedEntryType === "lateral" ? "Lateral Entry" : "Regular"}</p>
             </div>
           )}
           {user?.subject && (
@@ -526,7 +572,7 @@ function DangerZoneSection({ clearAccountData }) {
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 max-w-md w-full space-y-4">
-                        {status === "success" ? (
+            {status === "success" ? (
               <>
                 <h3 className="text-[var(--color-text-primary)] font-semibold text-lg">Account Deleted</h3>
                 <p className="text-[var(--color-text-secondary)] text-sm">

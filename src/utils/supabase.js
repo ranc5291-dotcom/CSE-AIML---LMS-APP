@@ -9,12 +9,21 @@ export { supabase };
 
 export async function logLogin(user) {
   try {
-    await supabase.from("login_logs").insert({
+    const { error } = await supabase.from("login_logs").insert({
       user_id:   user.id,
       user_name: user.name,
       role:      user.role,
       usn:       user.usn || user.id,
     });
+    if (error) console.warn("logLogin: login_logs insert failed:", error.message);
+
+    // Keep the latest login on the profile itself so the admin dashboard
+    // doesn't depend on how many login_logs rows it happens to load.
+    const { error: pErr } = await supabase
+      .from("profiles")
+      .update({ last_login_at: new Date().toISOString() })
+      .eq("id", user.id);
+    if (pErr) console.warn("logLogin: last_login_at update failed:", pErr.message);
   } catch (e) { console.warn("logLogin failed", e); }
 }
 

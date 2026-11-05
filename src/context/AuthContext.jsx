@@ -309,6 +309,13 @@ export function AuthProvider({ children }) {
 
       const { user: fbUser } = await firebaseRegister(userData.email, userData.password);
 
+      // Lateral entry students join directly in 2nd year and finish in 3 years.
+      // Use what the form sent; if it sent nothing, fall back to the 3-year duration.
+      const sentType = String(userData.entryType || userData.entry_type || "").toLowerCase();
+      const entryType = sentType
+        ? (sentType.includes("lateral") ? "lateral" : "regular")
+        : (Number(userData.endYear) - Number(userData.startYear) === 3 ? "lateral" : "regular");
+
       const newProfile = {
         id:         fbUser.uid,
         role:       userData.role,
@@ -324,6 +331,8 @@ export function AuthProvider({ children }) {
         start_year: userData.startYear || null,
         end_year:   userData.endYear || null,
         status:     userData.status || "active",
+        entry_type: entryType,
+        admission_year: userData.startYear || null,
       };
 
       const { error: insertErr } = await supabase.from("profiles").insert(newProfile);
@@ -341,6 +350,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
       setUser(sessionUser);
       bump();
+      logLogin(sessionUser); // newly registered students count as logged in too
 
       return { success: true, user: sessionUser };
 

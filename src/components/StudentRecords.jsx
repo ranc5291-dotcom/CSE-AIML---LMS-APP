@@ -2,6 +2,8 @@ import * as XLSX from "xlsx";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase, getCatalogSubjects, getStudentMarksFull, getStudentAttendanceFull } from "../utils/supabase";
 import { normalizeSubjectMarks } from "../context/LMSContext";
+import { isLateralStudent } from "../utils/studentHelpers";
+import { useLiveRefresh } from "../utils/useLiveRefresh";
 
 const SEMS = [1, 2, 3, 4, 5, 6, 7, 8];
 const ORD = ["1st", "2nd", "3rd", "4th"];
@@ -399,7 +401,7 @@ function StudentDetail({ student, history, changeLog = [], adminName, onClose, o
           <div className="min-w-0">
             <h2 className="text-[var(--color-text-primary)] font-bold text-lg truncate">{student.name}</h2>
             <p className="text-[var(--color-text-secondary)] text-xs mt-0.5">
-              🪪 {student.usn || student.id} · 🏛️ {student.branch || "CSEAIML"}
+              🪪 {student.usn || (isLateralStudent(student) ? "USN pending" : student.id)} · 🏛️ {student.branch || "CSEAIML"}{isLateralStudent(student) ? " · Lateral entry" : ""}
             </p>
             <p className="text-[var(--color-text-muted)] text-xs mt-0.5">
               {student.email || "—"}{student.phone ? ` · ${student.phone}` : ""}
@@ -485,6 +487,7 @@ export default function StudentRecords({ adminName }) {
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const liveTick = useLiveRefresh(["profiles", "profile_change_log", "student_status_history", "student_backlogs"]);
 
   const [batch, setBatch] = useState("All");
   const [q, setQ] = useState("");
@@ -495,10 +498,10 @@ export default function StudentRecords({ adminName }) {
 
   useEffect(() => {
     let c = false;
-    setLoading(true);
+    // First load shows "Loading…"; live refreshes update in place.
     Promise.all([
       supabase.from("profiles")
-        .select("id,usn,name,email,phone,branch,year,sem,status,admission_year,start_year,end_year,role")
+        .select("id,usn,name,email,phone,branch,year,sem,status,admission_year,start_year,end_year,role,entry_type")
         .eq("role", "student"),
       supabase.from("student_backlogs").select("*"),
       supabase.from("student_status_history").select("*").order("created_at", { ascending: false }),
@@ -516,7 +519,7 @@ export default function StudentRecords({ adminName }) {
       setLoading(false);
     });
     return () => { c = true; };
-  }, [reloadKey]);
+  }, [reloadKey, liveTick]);
 
   const pendingBy = useMemo(() => {
     const m = {};
@@ -544,6 +547,7 @@ export default function StudentRecords({ adminName }) {
         dropout: list.filter((s) => s.status === "dropout").length,
         transferred: list.filter((s) => s.status === "transferred").length,
         withBacklogs: list.filter((s) => pendingBy[s.id] > 0).length,
+        lateral: list.filter(isLateralStudent).length,
       }))
       .sort((a, b) => b.key.localeCompare(a.key));
   }, [students, pendingBy]);
@@ -558,6 +562,7 @@ export default function StudentRecords({ adminName }) {
       const st = s.status || "active";
       if (filter === "All") return true;
       if (filter === "promoted") return promotedSet.has(s.id);
+      if (filter === "lateral") return isLateralStudent(s);
       if (filter === "backlogs") return pendingBy[s.id] > 0;
       return st === filter;
     })
@@ -612,7 +617,7 @@ export default function StudentRecords({ adminName }) {
 
   const FILTERS = [
     ["All", "All"], ["active", "Active"], ["promoted", "Promoted"],
-    ["detained", "Detained"], ["transferred", "Transferred"], ["dropout", "Dropout"], ["backlogs", "Has backlogs"],
+    ["detained", "Detained"], ["transferred", "Transferred"], ["dropout", "Dropout"], ["backlogs", "Has backlogs"], ["lateral", "Lateral entry"],
   ];
 
   return (
@@ -663,6 +668,7 @@ export default function StudentRecords({ adminName }) {
                   {b.detained > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">{b.detained} detained</span>}
                   {b.transferred > 0 && <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">{b.transferred} transferred</span>}
                   {b.dropout > 0 && <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">{b.dropout} dropout</span>}
+                  {b.lateral > 0 && <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400">{b.lateral} lateral</span>}
                   {b.withBacklogs > 0 && <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400">{b.withBacklogs} with backlogs</span>}
                 </div>
               </button>
@@ -706,10 +712,11 @@ export default function StudentRecords({ adminName }) {
                   <div className="flex-1 min-w-40">
                     <p className="text-[var(--color-text-primary)] text-sm font-semibold">{s.name}</p>
                     <p className="text-[var(--color-text-muted)] text-xs">
-                      {s.usn || s.id} · {batchLabel(batchKey(s))} · {s.year || "—"} · {s.sem || "—"}
+                      {s.usn || (isLateralStudent(s) ? "USN pending" : s.id)} · {batchLabel(batchKey(s))} · {s.year || "—"} · {s.sem || "—"}
                     </p>
                   </div>
                   <div className="flex gap-1.5 flex-wrap">
+                    {isLateralStudent(s) && <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400">Lateral</span>}
                     {promotedSet.has(s.id) && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">Promoted</span>}
                     {pend > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400">{pend} backlog{pend > 1 ? "s" : ""}</span>}
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[st] || STATUS_BADGE.active}`}>{STATUS_LABEL[st] || "Active"}</span>

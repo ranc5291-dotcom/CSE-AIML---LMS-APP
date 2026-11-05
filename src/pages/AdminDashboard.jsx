@@ -6,10 +6,16 @@ import { useLMS } from "../context/LMSContext";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import StudentRecords, { logStatusEvent } from "../components/StudentRecords";
+import { isLateralStudent, lastLoginOf } from "../utils/studentHelpers";
+import { useLiveRefresh } from "../utils/useLiveRefresh";
 import {
   getAllUserRoles, getEventRegistrationSummary, getAllEventRegistrations, deleteEventRegistration,
   getStudentsByYearSem, getCatalogSubjects, getAttendanceForYearSem, saveAttendanceBulk, getMarksForYearSem,
 } from "../utils/supabase";
+import {
+  parseAttendanceFile, suggestSubjectMappings, buildStudentIndex, findStudent,
+  buildAttendanceTemplate, labelKey,
+} from "../utils/attendanceImport";
 
 const TABS = ["Overview", "Student Management", "Student Records", "Marks & Attendance", "Faculty", "Placement & Admin", "Roles & Access", "Complaints", "Events", "Announcements", "Notice Board", "Gallery"];
 const ALL_ROLES = ["student", "faculty", "admin", "placement"];
@@ -49,7 +55,10 @@ const SEM_TO_YEAR_MAP = Object.fromEntries(SEM_SEQUENCE.map(({ year, sem }) => [
 // Lateral entry students join directly in 2nd year. The entry type is saved on
 // the profile at registration (entry_type = "lateral"); older students have none
 // and count as regular.
-const isLateralStudent = (s) => (s?.entryType || s?.entry_type) === "lateral";
+// isLateralStudent / lastLoginOf come from ../utils/studentHelpers (profiles.entry_type / last_login_at).
+
+// Attachments (announcements) — which file names should render as an image preview.
+const isImageFile = (nameOrUrl) => /\.(png|jpe?g|webp|gif)$/i.test(nameOrUrl || "");
 
 // ══════════════════════════════════════════════════════════
 // MARKS & ATTENDANCE (Admin)
@@ -132,65 +141,159 @@ function MarksAttendancePanel({ adminId }) {
 
   const cellOf = (key) => edits[key] || originalOf(key);
 
- const setCell = (key, field, raw) => {
-  const value = raw.replace(/\D/g, "").slice(0, 4);
-  setEdits((prev) => {
-    const copy = { ...prev };
-    const apply = (k, patch) => {
-      const orig = originalOf(k);
-      const next = { ...(copy[k] || orig), ...patch };
-      if (next.a === orig.a && next.t === orig.t) delete copy[k];
-      else copy[k] = next;
-    };
-    if (field === "t") {
-      // total classes is per-subject, so copy it to every student
-      const subjectId = key.split("|")[1];
-      students.forEach((st) => apply(`${st.id}|${subjectId}`, { t: value }));
-    } else {
-      apply(key, { a: value });
-    }
-    return copy;
-  });
-  setMsg(null);
-};
-const fileRef = useRef(null);
-
-const handleUpload = async (e) => {
-  const file = e.target.files?.[0];
-  e.target.value = "";
-  if (!file) return;
-  try {
-    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
-    const norm = (v) => String(v ?? "").trim().toUpperCase();
-
-    const stuByUsn = {};
-    students.forEach((st) => { stuByUsn[norm(st.usn || st.id)] = st; });
-
-    const found = {};
-    const missing = new Set();
-    const skippedSheets = [];
-    let invalid = 0;
-
-    wb.SheetNames.forEach((sheetName) => {
-      // match sheet to subject by code, then by name
-      let sub = subjects.find((s) => norm(s.subject_code) === norm(sheetName))
-             || subjects.find((s) => norm(s.subject_name) === norm(sheetName));
-      // single-sheet file + a subject picked in the dropdown
-      if (!sub && wb.SheetNames.length === 1 && attSubjectFilter !== "all") {
-        sub = subjects.find((s) => String(s.id) === attSubjectFilter);
+  const setCell = (key, field, raw) => {
+    const value = raw.replace(/\D/g, "").slice(0, 4);
+    setEdits((prev) => {
+      const copy = { ...prev };
+      const apply = (k, patch) => {
+        const orig = originalOf(k);
+        const next = { ...(copy[k] || orig), ...patch };
+        if (next.a === orig.a && next.t === orig.t) delete copy[k];
+        else copy[k] = next;
+      };
+      if (field === "t") {
+        // total classes is per-subject, so copy it to every student
+        const subjectId = key.split("|")[1];
+        students.forEach((st) => apply(`${st.id}|${subjectId}`, { t: value }));
+      } else {
+        apply(key, { a: value });
       }
-      if (!sub) { skippedSheets.push(sheetName); return; }
+      return copy;
+    });
+    setMsg(null);
+  };
+  // ── Bulk upload (PDF or Excel/CSV) ──────────────────────────────
+  // 1. parseAttendanceFile reads the file into "sources" (one per Excel sheet,
+  //    or one per subject column of the PDF table).
+  // 2. The admin reviews/changes which LMS subject each source belongs to.
+  // 3. applyImport loads the values into the table (amber cells) — nothing is
+  //    saved until "Save Attendance" is clicked.
+  const fileRef = useRef(null);
+  const [importPlan, setImportPlan] = useState(null); // { fileName, kind, sem, period, sources, mapping }
+  const [parsing, setParsing]       = useState(false);
 
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
-      rows.forEach((raw) => {
-        const r = {};
-        Object.keys(raw).forEach((k) => { r[k.trim().toLowerCase()] = raw[k]; });
-        const st = stuByUsn[norm(r.usn)];
-        if (!st) { if (norm(r.usn)) missing.add(norm(r.usn)); return; }
-        const a = Number(r.attended), t = Number(r.total);
-        if (!Number.isInteger(a) || !Number.isInteger(t) || a < 0 || t < 0 || a > t) { invalid++; return; }
-        found[`${st.id}|${sub.id}`] = { a: String(a), t: String(t) };
+  const mapStorageKey = `attendance-label-map:${sem}`;
+  const readSavedMap = () => {
+    try { return JSON.parse(localStorage.getItem(mapStorageKey) || "{}"); } catch { return {}; }
+  };
+  const writeSavedMap = (obj) => {
+    try { localStorage.setItem(mapStorageKey, JSON.stringify(obj)); } catch { /* storage unavailable */ }
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setParsing(true);
+    setMsg(null);
+    try {
+      const parsed = await parseAttendanceFile(file, XLSX);
+      const mapping = suggestSubjectMappings(
+        parsed.sources, subjects, readSavedMap(),
+        attSubjectFilter !== "all" ? attSubjectFilter : null
+      );
+      setImportPlan({ fileName: file.name, ...parsed, mapping });
+    } catch (err) {
+      setMsg({ type: "err", text: "Could not read the file: " + err.message });
+    }
+    setParsing(false);
+  };
+
+  const setSourceSubject = (si, value) =>
+    setImportPlan((p) => ({ ...p, mapping: { ...p.mapping, [si]: value === "" ? undefined : value } }));
+
+  const importWarnings = useMemo(() => {
+    if (!importPlan) return { semMismatch: false, duplicates: false, mappedCount: 0 };
+    const chosen = Object.entries(importPlan.mapping)
+      .filter(([si, id]) => id !== undefined && importPlan.sources[Number(si)]?.rows.length)
+      .map(([, id]) => String(id));
+    const semNum = Number(String(sem).replace(/\D/g, ""));
+    return {
+      semMismatch: importPlan.sem != null && importPlan.sem !== semNum,
+      duplicates: new Set(chosen).size !== chosen.length,
+      mappedCount: chosen.length,
+    };
+  }, [importPlan, sem]);
+
+  // Registered students that the file has no (usable) row for, per mapped subject —
+  // shown in the review step so nobody is silently left out.
+  const importReview = useMemo(() => {
+    if (!importPlan) return [];
+    const idx = buildStudentIndex(students);
+    const out = [];
+    importPlan.sources.forEach((src, si) => {
+      const subjId = importPlan.mapping[si];
+      if (subjId === undefined || !src.rows.length) return;
+      const sub = subjects.find((x) => String(x.id) === String(subjId));
+      if (!sub) return;
+      const hit = new Set();
+      src.rows.forEach((r) => { const st = findStudent(r, idx); if (st) hit.add(st.id); });
+      out.push({
+        label: src.label,
+        subjectName: sub.subject_code || sub.subject_name,
+        missing: students.filter((st) => !hit.has(st.id)),
       });
+    });
+    return out;
+  }, [importPlan, students, subjects]);
+
+  const applyImport = () => {
+    if (!importPlan) return;
+    const idx = buildStudentIndex(students);
+    const found = {};
+    const imported = [];
+    const skippedCols = [];
+    const notLoaded = []; // { who, subject, reason } — everyone who did NOT get attendance loaded
+    const saved = readSavedMap();
+
+    importPlan.sources.forEach((src, si) => {
+      const subjId = importPlan.mapping[si];
+      if (subjId === undefined || !src.rows.length) return;
+      const sub = subjects.find((s) => String(s.id) === String(subjId));
+      if (!sub) return;
+      saved[labelKey(src.label)] = sub.id; // remember for next time
+      const subjLabel = sub.subject_code || sub.subject_name;
+
+      const hit = new Set();
+      let count = 0;
+      src.rows.forEach((r) => {
+        const who = `${r.name || "Unknown"} (${r.usn || "no USN"})`;
+        const st = findStudent(r, idx);
+        if (!st) {
+          notLoaded.push({ who, subject: subjLabel, reason: `Not registered in ${year} · ${sem} (no student matches this USN or name)` });
+          return;
+        }
+        hit.add(st.id);
+        const a = r.attended, t = r.total;
+        if (!Number.isInteger(a) || !Number.isInteger(t)) {
+          notLoaded.push({ who: `${st.name} (${st.usn || st.id})`, subject: subjLabel, reason: "Attended or total classes is missing or not a whole number" });
+          return;
+        }
+        if (a < 0 || t < 0) {
+          notLoaded.push({ who: `${st.name} (${st.usn || st.id})`, subject: subjLabel, reason: "Attended or total classes is negative" });
+          return;
+        }
+        if (a > t) {
+          notLoaded.push({ who: `${st.name} (${st.usn || st.id})`, subject: subjLabel, reason: `Attended (${a}) is more than total (${t})` });
+          return;
+        }
+        found[`${st.id}|${sub.id}`] = { a: String(a), t: String(t) };
+        count++;
+      });
+
+      // registered students that have no row for this subject in the file
+      students.filter((st) => !hit.has(st.id)).forEach((st) => {
+        notLoaded.push({ who: `${st.name} (${st.usn || st.id})`, subject: subjLabel, reason: "No attendance for this subject in the file (existing value kept)" });
+      });
+
+      imported.push(`${subjLabel} (${count})`);
+    });
+    writeSavedMap(saved);
+
+    importPlan.sources.forEach((src, si) => {
+      if (importPlan.mapping[si] === undefined) {
+        skippedCols.push(`${src.label}: ${src.rows.length ? "skipped (no subject chosen)" : (src.note || "no attendance data")}`);
+      }
     });
 
     setEdits((prev) => {
@@ -204,15 +307,21 @@ const handleUpload = async (e) => {
     });
 
     const count = Object.keys(found).length;
-    const parts = [`Loaded ${count} entr${count === 1 ? "y" : "ies"} from the file. Review, then click Save Attendance.`];
-    if (missing.size) parts.push(`${missing.size} USN(s) not found in ${year} · ${sem}.`);
-    if (invalid) parts.push(`${invalid} row(s) skipped (invalid numbers).`);
-    if (skippedSheets.length) parts.push(`Sheet(s) not matched to a subject: ${skippedSheets.join(", ")}.`);
-    setMsg({ type: count > 0 ? "ok" : "err", text: parts.join(" ") });
-  } catch (err) {
-    setMsg({ type: "err", text: "Could not read the file: " + err.message });
-  }
-};
+    setMsg({
+      type: count > 0 ? "ok" : "err",
+      text: count > 0
+        ? `Loaded ${count} entr${count === 1 ? "y" : "ies"} from ${importPlan.fileName}: ${imported.join(", ")}. Review, then click Save Attendance.`
+        : `No entries were loaded from ${importPlan.fileName}.`,
+      notLoaded,
+      skippedCols,
+    });
+    setImportPlan(null);
+  };
+
+  const downloadTemplate = () => {
+    const wb = buildAttendanceTemplate(XLSX, students, subjects);
+    XLSX.writeFile(wb, `Attendance_Template_${String(sem).replace(/\s+/g, "_")}.xlsx`);
+  };
 
   const dirtyCount = Object.keys(edits).length;
 
@@ -220,13 +329,13 @@ const handleUpload = async (e) => {
     const rows = [];
     for (const [key, v] of Object.entries(edits)) {
       const [studentId, subjectId] = key.split("|");
-     if (v.a === "" && v.t === "") continue;
-if (v.t === "") {
-  setMsg({ type: "err", text: "Enter total classes (or clear attended) before saving." });
-  return;
-}
-const attended = v.a === "" ? 0 : Number(v.a);
-const total = Number(v.t);
+      if (v.a === "" && v.t === "") continue;
+      if (v.t === "") {
+        setMsg({ type: "err", text: "Enter total classes (or clear attended) before saving." });
+        return;
+      }
+      const attended = v.a === "" ? 0 : Number(v.a);
+      const total = Number(v.t);
       if (attended > total) {
         const stu = students.find((s) => s.id === studentId);
         setMsg({ type: "err", text: `Attended classes can't be more than total classes (${stu?.name || studentId}).` });
@@ -259,10 +368,10 @@ const total = Number(v.t);
     }
   };
 
- const pctOf = (a, t) => {
-  const an = Number(a), tn = Number(t);
-  return tn > 0 ? Math.round((an / tn) * 100) : null;
-};
+  const pctOf = (a, t) => {
+    const an = Number(a), tn = Number(t);
+    return tn > 0 ? Math.round((an / tn) * 100) : null;
+  };
   const pctClass = (p) =>
     p === null ? "text-[var(--color-text-muted)]" : p >= 75 ? "text-green-400" : p >= 60 ? "text-amber-400" : "text-red-400";
 
@@ -318,15 +427,21 @@ const total = Number(v.t);
           ))}
           {view === "Attendance" && (
             <>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleUpload} className="hidden" />
-            <button
-            onClick={() => fileRef.current?.click()}
-            disabled={loading || subjects.length === 0}
-            className="px-4 py-1.5 rounded-xl text-xs font-medium cursor-pointer bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white">
-            📤 Upload Excel
-            </button>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.pdf" onChange={handleUpload} className="hidden" />
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={loading || parsing || subjects.length === 0}
+                className="px-4 py-1.5 rounded-xl text-xs font-medium cursor-pointer bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white">
+                {parsing ? "⏳ Reading file…" : "📤 Upload PDF / Excel"}
+              </button>
+              <button
+                onClick={downloadTemplate}
+                disabled={loading || subjects.length === 0 || students.length === 0}
+                className="px-4 py-1.5 rounded-xl text-xs font-medium cursor-pointer bg-[var(--color-bg-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] disabled:opacity-40">
+                ⬇️ Excel Template
+              </button>
             </>
-            )}
+          )}
 
           {view === "Attendance" ? (
             <select value={attSubjectFilter} onChange={(e) => setAttSubjectFilter(e.target.value)} className={selectCls + " ml-auto"}>
@@ -349,7 +464,33 @@ const total = Number(v.t);
       {msg && (
         <div className={`rounded-xl px-4 py-3 text-sm border
           ${msg.type === "ok" ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-red-500/10 border-red-500/30 text-red-400"}`}>
-          {msg.text}
+          <p>{msg.text}</p>
+
+          {msg.skippedCols?.length > 0 && (
+            <p className="text-xs mt-2 opacity-80">Columns not imported: {msg.skippedCols.join(" · ")}</p>
+          )}
+
+          {msg.notLoaded?.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-current/20">
+              <p className="text-xs font-semibold mb-2">
+                {msg.notLoaded.length} entr{msg.notLoaded.length === 1 ? "y was" : "ies were"} not loaded:
+              </p>
+              <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
+                {Object.entries(
+                  msg.notLoaded.reduce((acc, n) => { (acc[n.subject] = acc[n.subject] || []).push(n); return acc; }, {})
+                ).map(([subject, list]) => (
+                  <div key={subject}>
+                    <p className="text-xs font-semibold">{subject} — {list.length} not loaded</p>
+                    <ul className="text-xs list-disc list-inside space-y-0.5 mt-1">
+                      {list.map((n, i) => (
+                        <li key={i}><span className="font-medium">{n.who}</span> — <span className="opacity-80">{n.reason}</span></li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -378,13 +519,13 @@ const total = Number(v.t);
                   <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-surface-alt)]">
                     <th className="text-left text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 sticky left-0 bg-[var(--color-bg-surface-alt)] min-w-44 z-[1]">Student</th>
                     {visibleSubjects.map((s) => (
-                     <th key={s.id} className="text-center text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 min-w-36">
-                       {s.subject_name}
-                       <span className="block text-[var(--color-accent-solid)] font-semibold mt-0.5">
-                        {s.subject_code || "—"}
+                      <th key={s.id} className="text-center text-[var(--color-text-secondary)] text-xs font-medium py-3 px-3 min-w-36">
+                        {s.subject_name}
+                        <span className="block text-[var(--color-accent-solid)] font-semibold mt-0.5">
+                          {s.subject_code || "—"}
                         </span>
                         <span className="block text-[var(--color-text-muted)] font-normal">attended / total</span>
-                        </th>
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -507,6 +648,94 @@ const total = Number(v.t);
         </div>
       )}
 
+      {/* Review uploaded file — map columns/sheets to subjects */}
+      {importPlan && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-[var(--color-text-primary)] font-bold text-lg mb-1">Review Uploaded Attendance</h3>
+            <p className="text-[var(--color-text-muted)] text-xs mb-4">
+              {importPlan.kind === "pdf" ? "📄" : "📊"} {importPlan.fileName}
+              {importPlan.sem != null && <> · SEM {importPlan.sem}</>}
+              {importPlan.period && <> · {importPlan.period}</>}
+              {importPlan.studentCount != null && <> · {importPlan.studentCount} students in file</>}
+            </p>
+
+            {importWarnings.semMismatch && (
+              <div className="rounded-xl px-4 py-3 text-xs border bg-amber-500/10 border-amber-500/30 text-amber-400 mb-3">
+                ⚠ This file is for Semester {importPlan.sem}, but you are on {year} · {sem}. Cancel and switch the semester if that is not intended.
+              </div>
+            )}
+            {importWarnings.duplicates && (
+              <div className="rounded-xl px-4 py-3 text-xs border bg-red-500/10 border-red-500/30 text-red-400 mb-3">
+                Two columns are mapped to the same subject. Pick a different subject for one of them, or skip it.
+              </div>
+            )}
+
+            <p className="text-[var(--color-text-secondary)] text-xs mb-2">
+              Match each column / sheet in the file to a subject. Your choice is remembered for next time.
+            </p>
+
+            <div className="space-y-2 mb-5">
+              {importPlan.sources.map((src, si) => {
+                const empty = src.rows.length === 0;
+                return (
+                  <div key={si} className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl p-3 flex flex-wrap items-center gap-3">
+                    <div className="min-w-24">
+                      <p className="text-[var(--color-text-primary)] text-sm font-semibold">{src.label}</p>
+                      <p className="text-[var(--color-text-muted)] text-xs">
+                        {empty ? "no attendance data" : `${src.rows.length} students`}
+                        {src.total != null && ` · ${src.total} classes`}
+                      </p>
+                    </div>
+                    {empty ? (
+                      <p className="text-amber-400 text-xs flex-1">{src.note || "Nothing to import"} — skipped.</p>
+                    ) : (
+                      <select
+                        value={importPlan.mapping[si] !== undefined ? String(importPlan.mapping[si]) : ""}
+                        onChange={(e) => setSourceSubject(si, e.target.value)}
+                        className={selectCls + " flex-1 min-w-48"}>
+                        <option value="">— Skip this column —</option>
+                        {subjects.map((s) => (
+                          <option key={s.id} value={String(s.id)}>
+                            {s.subject_name}{s.subject_code ? ` (${s.subject_code})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {importReview.some((r) => r.missing.length > 0) && (
+              <div className="rounded-xl px-4 py-3 text-xs border bg-amber-500/10 border-amber-500/30 text-amber-400 mb-5 space-y-2 max-h-40 overflow-y-auto">
+                <p className="font-semibold">Registered students with no attendance in this file:</p>
+                {importReview.filter((r) => r.missing.length > 0).map((r) => (
+                  <p key={r.label}>
+                    <span className="font-medium">{r.subjectName}</span> ({r.missing.length}):{" "}
+                    {r.missing.slice(0, 12).map((st) => `${st.name} (${st.usn || st.id})`).join(", ")}
+                    {r.missing.length > 12 ? `, +${r.missing.length - 12} more` : ""}
+                  </p>
+                ))}
+                <p className="text-[var(--color-text-muted)]">Their current attendance stays unchanged.</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={() => setImportPlan(null)}
+                className="flex-1 py-2.5 bg-[var(--color-bg-surface-alt)] hover:opacity-80 text-[var(--color-text-primary)] rounded-xl text-sm cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={applyImport}
+                disabled={importWarnings.mappedCount === 0 || importWarnings.duplicates}
+                className="flex-1 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-semibold cursor-pointer">
+                Load into table{importWarnings.mappedCount > 0 ? ` (${importWarnings.mappedCount})` : ""}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirm attendance save */}
       {confirmRows && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -548,6 +777,10 @@ export default function AdminDashboard() {
 
   const location = useLocation();
 
+  // Re-fetch whenever a student registers, logs in or edits their details
+  // (Supabase realtime, plus a 60-second safety net and refresh on tab focus).
+  const liveTick = useLiveRefresh(["profiles", "login_logs", "user_roles", "event_registrations"]);
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeTab, setActiveTab]   = useState(
     TABS.includes(location.state?.tab) ? location.state.tab : "Overview"
@@ -566,6 +799,10 @@ export default function AdminDashboard() {
   // Announcement targeting — either specific semester(s), or the whole branch.
   const [annSemesters, setAnnSemesters] = useState([]);
   const [annBranchWide, setAnnBranchWide] = useState(false);
+  // Announcement attachment (image / PDF / document) — optional.
+  const [annFile, setAnnFile]       = useState(null);
+  const [annPosting, setAnnPosting] = useState(false);
+  const annFileRef = useRef(null);
   const [searchStudent, setSearchStudent] = useState("");
   const [filterYear, setFilterYear]       = useState("All");
   const [filterSem, setFilterSem]         = useState("All");
@@ -719,7 +956,7 @@ export default function AdminDashboard() {
     });
     getEventRegistrationSummary().then(setEventRegSummary);
     getAllEventRegistrations().then(setEventRegistrations);
-  }, [enrolledVersion]);
+  }, [enrolledVersion, liveTick]);
 
   const filteredStudents = students.filter((s) => {
     const matchSearch = searchStudent === "" ||
@@ -910,6 +1147,35 @@ export default function AdminDashboard() {
       alert("Failed to post notice: " + err.message);
     }
     setNoticePosting(false);
+  };
+
+  // Announcement can be posted as plain text, or with an optional attachment
+  // (image, PDF or document). The file is passed as the 2nd argument to
+  // addAnnouncement, which must upload it (same as addNotice) and store
+  // fileUrl / fileName on the announcement.
+  const handlePostAnnouncement = async () => {
+    if (!annTitle.trim() || annPosting) return;
+    setAnnPosting(true);
+    try {
+      await addAnnouncement(
+        {
+          title: annTitle,
+          tag: annTag,
+          postedBy: user?.name,
+          semesters: annBranchWide ? [] : annSemesters,
+          isBranchWide: annBranchWide,
+        },
+        annFile
+      );
+      setAnnTitle("");
+      setAnnSemesters([]);
+      setAnnBranchWide(false);
+      setAnnFile(null);
+      if (annFileRef.current) annFileRef.current.value = "";
+    } catch (err) {
+      alert("Failed to post announcement: " + err.message);
+    }
+    setAnnPosting(false);
   };
 
   const handleUploadGalleryPhoto = async () => {
@@ -1137,6 +1403,7 @@ export default function AdminDashboard() {
                 <p className="text-[var(--color-text-muted)] text-xs mb-4">
                   Total: <span className="text-[var(--color-text-primary)] font-medium">{lateralStudents.length}</span>
                   {" · "}USN pending: <span className="text-amber-400 font-medium">{lateralUsnPending}</span>
+                  {" · "}Logged in: <span className="text-green-400 font-medium">{lateralStudents.filter((s) => lastLoginOf(s, loginLog)).length}</span>
                   {" · "}Tap a semester to see those students.
                 </p>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1341,6 +1608,12 @@ export default function AdminDashboard() {
                             <span>🏛️ {s.branch || "CSEAIML"}</span>
                             {s.email && <span>📧 {s.email}</span>}
                             {s.phone && <span>📱 {s.phone}</span>}
+                            {(() => {
+                              const ll = lastLoginOf(s, loginLog);
+                              return ll
+                                ? <span className="text-green-400">🟢 Last login {new Date(ll).toLocaleString()}</span>
+                                : <span className="text-[var(--color-text-muted)]">⚪ Never logged in</span>;
+                            })()}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:flex-shrink-0">
@@ -1732,20 +2005,34 @@ export default function AdminDashboard() {
                 <h3 className="text-[var(--color-text-primary)] font-semibold">📢 Post Announcement</h3>
                 <div className="flex gap-3 flex-wrap">
                   <input value={annTitle} onChange={(e) => setAnnTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && annTitle.trim() && (
-                      addAnnouncement({
-                        title: annTitle, tag: annTag, postedBy: user?.name,
-                        semesters: annBranchWide ? [] : annSemesters,
-                        isBranchWide: annBranchWide,
-                      }),
-                      setAnnTitle(""), setAnnSemesters([]), setAnnBranchWide(false)
-                    )}
+                    onKeyDown={(e) => e.key === "Enter" && handlePostAnnouncement()}
                     placeholder="Announcement text..."
                     className="flex-1 min-w-full sm:min-w-48 bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent-solid)] text-sm" />
                   <select value={annTag} onChange={(e) => setAnnTag(e.target.value)}
                     className="bg-[var(--color-bg-surface-alt)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer">
                     {TAG_OPTIONS.map((t) => <option key={t}>{t}</option>)}
                   </select>
+                </div>
+
+                {/* Attachment — image, PDF or document (optional) */}
+                <div onClick={() => annFileRef.current?.click()}
+                  className={`w-full border border-dashed rounded-xl p-3 flex items-center gap-3 cursor-pointer
+                    ${annFile ? "border-[var(--color-accent-solid)] bg-[var(--color-accent-soft-bg)]" : "border-[var(--color-border)]"}`}>
+                  <span className="text-xl">{annFile ? (isImageFile(annFile.name) ? "🖼️" : "📄") : "📎"}</span>
+                  <p className="text-[var(--color-text-secondary)] text-xs flex-1 truncate">
+                    {annFile ? annFile.name : "Attach an image, PDF or document (optional)"}
+                  </p>
+                  {annFile && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setAnnFile(null); if (annFileRef.current) annFileRef.current.value = ""; }}
+                      className="text-[var(--color-text-muted)] hover:text-red-400 text-xs cursor-pointer flex-shrink-0">
+                      ✕
+                    </button>
+                  )}
+                  <input ref={annFileRef} type="file"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.webp"
+                    onChange={(e) => e.target.files[0] && setAnnFile(e.target.files[0])}
+                    className="hidden" />
                 </div>
 
                 {/* Announcement targeting — specific semester(s) or the whole branch */}
@@ -1778,21 +2065,10 @@ export default function AdminDashboard() {
                 </div>
 
                 <button
-                  onClick={() => {
-                    if (annTitle.trim()) {
-                      addAnnouncement({
-                        title: annTitle, tag: annTag, postedBy: user?.name,
-                        semesters: annBranchWide ? [] : annSemesters,
-                        isBranchWide: annBranchWide,
-                      });
-                      setAnnTitle("");
-                      setAnnSemesters([]);
-                      setAnnBranchWide(false);
-                    }
-                  }}
-                  disabled={!annTitle.trim()}
+                  onClick={handlePostAnnouncement}
+                  disabled={!annTitle.trim() || annPosting}
                   className="w-full px-4 py-2.5 bg-[var(--color-accent-solid)] hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-sm font-medium cursor-pointer">
-                  Post
+                  {annPosting ? "⏳ Posting..." : "Post"}
                 </button>
               </div>
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-5 space-y-3">
@@ -1800,8 +2076,8 @@ export default function AdminDashboard() {
                 {announcements.length === 0 && <p className="text-[var(--color-text-muted)] text-sm">No announcements yet.</p>}
                 {announcements.map((a) => (
                   <div key={a.id} className="flex items-start justify-between gap-3 p-4 bg-[var(--color-bg-surface-alt)] rounded-xl border-l-4 border-blue-500">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full">{a.tag}</span>
                         {(a.isBranchWide || (a.semesters && a.semesters.length > 0)) && (
                           <span className="text-xs px-2 py-0.5 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-full">
@@ -1810,6 +2086,19 @@ export default function AdminDashboard() {
                         )}
                       </div>
                       <p className="text-[var(--color-text-primary)] text-sm font-medium">{a.title}</p>
+                      {a.fileUrl && (
+                        isImageFile(a.fileName || a.fileUrl) ? (
+                          <a href={a.fileUrl} target="_blank" rel="noreferrer">
+                            <img src={a.fileUrl} alt={a.fileName || "Attachment"}
+                              className="mt-2 max-h-40 rounded-lg border border-[var(--color-border)] object-cover" />
+                          </a>
+                        ) : (
+                          <a href={a.fileUrl} target="_blank" rel="noreferrer" download={a.fileName}
+                            className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-[var(--color-accent-soft-bg)] text-[var(--color-accent-soft-text)] rounded-lg text-xs font-medium hover:opacity-80">
+                            📎 {a.fileName || "Attachment"}
+                          </a>
+                        )
+                      )}
                       <p className="text-[var(--color-text-muted)] text-xs mt-1">{a.time} · Posted by {a.postedBy}</p>
                     </div>
                     <button onClick={() => removeAnnouncement(a.id)}
