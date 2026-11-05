@@ -36,7 +36,7 @@ const batchKey = (s) => {
 const batchLabel = (k) => (k === "Unknown" ? "Batch not set" : k.replace("-", " – "));
 
 // ── Profile changes made by students (USN / batch years) ──
-const FIELD_LABEL = { usn: "USN", admission_year: "Admission year", end_year: "End year" };
+const FIELD_LABEL = { usn: "USN", admission_year: "Admission year", end_year: "End year", entry_type: "Entry type", name: "Name", phone: "Phone" };
 
 // One student save writes one row per changed field with the same timestamp,
 // so group them back into a single "who changed what" entry.
@@ -100,11 +100,10 @@ function ChangeEntry({ g, onOpen }) {
 }
 
 function ChangeLogPanel({ log, logErr, onOpen }) {
-  const [showAll, setShowAll] = useState(false);
   const groups = useMemo(() => groupLog(log), [log]);
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const recent = groups.filter((g) => g.at && new Date(g.at).getTime() >= weekAgo).length;
-  const shown = showAll ? groups : groups.slice(0, 3);
+  const shown = groups;
 
   return (
     <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 space-y-3">
@@ -123,13 +122,7 @@ function ChangeLogPanel({ log, logErr, onOpen }) {
           No changes yet. When a student corrects their USN or batch years in Settings, it shows up here.
         </p>
       )}
-      {shown.map((g) => <ChangeEntry key={g.key} g={g} onOpen={onOpen} />)}
-      {groups.length > 3 && (
-        <button onClick={() => setShowAll((v) => !v)}
-          className="text-xs text-[var(--color-accent-soft-text)] cursor-pointer">
-          {showAll ? "Show less" : `Show all ${groups.length}`}
-        </button>
-      )}
+      <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">{shown.map((g) => <ChangeEntry key={g.key} g={g} onOpen={onOpen} />)}</div>
     </div>
   );
 }
@@ -505,7 +498,7 @@ export default function StudentRecords({ adminName }) {
         .eq("role", "student"),
       supabase.from("student_backlogs").select("*"),
       supabase.from("student_status_history").select("*").order("created_at", { ascending: false }),
-      supabase.from("profile_change_log").select("*").order("created_at", { ascending: false }).limit(300),
+      supabase.from("profile_change_log").select("*").order("created_at", { ascending: false }).limit(1000),
     ]).then(([p, b, h, cl]) => {
       if (c) return;
       if (p.error) setLoadErr("Could not load students: " + p.error.message);

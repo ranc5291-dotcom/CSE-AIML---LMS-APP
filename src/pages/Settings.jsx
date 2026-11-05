@@ -83,7 +83,31 @@ function AccountSection({ user, updateUserProfile, changePassword }) {
     if (!name.trim()) { setProfileMsg({ type: "error", text: "Name cannot be empty." }); return; }
 
     setProfileSaving(true);
-    const result = await updateUserProfile(user.id, { name: name.trim(), phone: phone.trim() });
+    const newName = name.trim();
+    const newPhone = phone.trim();
+    const profChanges = [];
+    if (newName !== (user?.name || "")) profChanges.push({ field: "name", oldV: user?.name || "", newV: newName });
+    if (newPhone !== (user?.phone || "")) profChanges.push({ field: "phone", oldV: user?.phone || "", newV: newPhone });
+
+    const result = await updateUserProfile(user.id, { name: newName, phone: newPhone });
+
+    if (result.success && profChanges.length > 0 && (user?.role || "student") === "student") {
+      const { error: logErr } = await supabase.from("profile_change_log").insert(
+        profChanges.map((c) => ({
+          student_id: user.id,
+          student_name: newName || null,
+          student_usn: user.usn || null,
+          student_email: user.email || null,
+          field: c.field,
+          old_value: c.oldV || null,
+          new_value: c.newV || "—",
+          changed_by: user.id,
+          changed_by_name: newName || null,
+          changed_by_role: user.role || "student",
+        }))
+      );
+      if (logErr) console.warn("Change log not saved:", logErr.message);
+    }
     setProfileSaving(false);
 
     if (result.success) {
