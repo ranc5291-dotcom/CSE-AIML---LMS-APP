@@ -13,7 +13,9 @@ const STOP_WORDS = new Set(["OF", "AND", "FOR", "USING", "THE", "TO", "IN", "WIT
 
 export const normUsn = (v) => {
   const s = String(v ?? "").toUpperCase().replace(/\s+/g, "");
-  return s.replace(/^I(?=EW)/, "1");
+  return s
+    .replace(/^I(?=EW)/, "1")
+    .replace(/^(1EW\d{2}[A-Z]{2})([0-9OI]{3})$/, (m, a, b) => a + b.replace(/O/g, "0").replace(/I/g, "1"));
 };
 
 export const isRealUsn = (v) => {
@@ -374,10 +376,20 @@ export function findStudent(row, idx) {
   // e.g. "VISHWA NOOLESH MUTAGI" and "Vishwa N M". Only accepted if exactly one student fits.
   const parts = n.split(" ").filter(Boolean);
   if (parts.length >= 2) {
-    const compat = (a, b) => a === b || (a.length === 1 && b.startsWith(a)) || (b.length === 1 && a.startsWith(b));
+    // one-letter spelling difference, e.g. MUTAGI / MUTTAGI (names of 5+ letters only)
+    const near = (a, b) => {
+      if (a === b) return true;
+      if (a.length < 5 || b.length < 5 || Math.abs(a.length - b.length) > 1) return false;
+      let i = 0;
+      while (i < a.length && i < b.length && a[i] === b[i]) i++;
+      if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);
+      const [sh, lo] = a.length < b.length ? [a, b] : [b, a];
+      return sh.slice(i) === lo.slice(i + 1);
+    };
+    const compat = (a, b) => near(a, b) || (a.length === 1 && b.startsWith(a)) || (b.length === 1 && a.startsWith(b));
     const initialMatches = idx.list.filter((st) => {
       const sp = normName(st.name).split(" ").filter(Boolean);
-      if (sp.length < 2 || sp[0] !== parts[0]) return false;
+      if (sp.length < 2 || !near(sp[0], parts[0])) return false;
       const [short, long] = sp.length <= parts.length ? [sp, parts] : [parts, sp];
       const used = new Set();
       return short.slice(1).every((t) => {
